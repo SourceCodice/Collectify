@@ -1,3 +1,5 @@
+<img width="1024" height="1024" alt="ChatGPT Image 16 apr 2026, 16_07_00" src="https://github.com/user-attachments/assets/063f47ca-13f6-4708-b47d-8d38479856b9" />
+
 # Collectify
 
 Collectify e' un'app desktop pensata per organizzare collezioni personali di qualsiasi tipo.
