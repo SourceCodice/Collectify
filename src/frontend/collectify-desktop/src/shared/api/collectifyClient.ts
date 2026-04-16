@@ -1,5 +1,6 @@
 import type {
   CollectionDetail,
+  ItemImage,
   CollectionItem,
   CollectionSummary,
   CreateCollectionPayload,
@@ -24,8 +25,45 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+async function uploadImage<T>(path: string, formData: FormData, method: "POST" | "PUT"): Promise<T> {
+  const response = await fetch(`${apiBaseUrl}${path}`, {
+    method,
+    body: formData
+  });
+
+  if (!response.ok) {
+    throw new Error(`Collectify API returned ${response.status}`);
+  }
+
+  return response.json() as Promise<T>;
+}
+
+async function requestNoContent(path: string, init?: RequestInit): Promise<void> {
+  const response = await fetch(`${apiBaseUrl}${path}`, init);
+
+  if (!response.ok) {
+    throw new Error(`Collectify API returned ${response.status}`);
+  }
+}
+
+function buildImageFormData(file: File, options?: { caption?: string; isPrimary?: boolean }) {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  if (options?.caption) {
+    formData.append("caption", options.caption);
+  }
+
+  if (typeof options?.isPrimary === "boolean") {
+    formData.append("isPrimary", String(options.isPrimary));
+  }
+
+  return formData;
+}
+
 export const collectifyClient = {
   apiBaseUrl,
+  resolveAssetUrl: (url: string) => (url.startsWith("http") ? url : `${apiBaseUrl}${url}`),
   listCollections: () => request<CollectionSummary[]>("/api/collections"),
   getCollection: (id: string) => request<CollectionDetail>(`/api/collections/${id}`),
   createCollection: (payload: CreateCollectionPayload) =>
@@ -37,5 +75,27 @@ export const collectifyClient = {
     request<CollectionItem>(`/api/collections/${collectionId}/items`, {
       method: "POST",
       body: JSON.stringify(payload)
+    }),
+  uploadItemImage: (collectionId: string, itemId: string, file: File, options?: { caption?: string; isPrimary?: boolean }) =>
+    uploadImage<ItemImage>(
+      `/api/collections/${collectionId}/items/${itemId}/images`,
+      buildImageFormData(file, options),
+      "POST"
+    ),
+  replaceItemImage: (
+    collectionId: string,
+    itemId: string,
+    imageId: string,
+    file: File,
+    options?: { caption?: string; isPrimary?: boolean }
+  ) =>
+    uploadImage<ItemImage>(
+      `/api/collections/${collectionId}/items/${itemId}/images/${imageId}`,
+      buildImageFormData(file, options),
+      "PUT"
+    ),
+  deleteItemImage: (collectionId: string, itemId: string, imageId: string) =>
+    requestNoContent(`/api/collections/${collectionId}/items/${itemId}/images/${imageId}`, {
+      method: "DELETE"
     })
 };

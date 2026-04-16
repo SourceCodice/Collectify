@@ -16,6 +16,11 @@ type AttributeDraft = {
   value: string;
 };
 
+type ImagePreview = {
+  name: string;
+  url: string;
+};
+
 const emptyCollectionForm: CreateCollectionPayload = {
   name: "",
   type: "Custom",
@@ -43,6 +48,8 @@ export function App() {
   const [collectionForm, setCollectionForm] = useState<CreateCollectionPayload>(emptyCollectionForm);
   const [itemForm, setItemForm] = useState<CreateItemPayload>(emptyItemForm);
   const [attributeDrafts, setAttributeDrafts] = useState<AttributeDraft[]>([{ key: "", value: "" }]);
+  const [itemImageFiles, setItemImageFiles] = useState<File[]>([]);
+  const [itemImagePreviews, setItemImagePreviews] = useState<ImagePreview[]>([]);
 
   async function loadCollections(preferredCollectionId?: string) {
     setLoadState("loading");
@@ -85,6 +92,19 @@ export function App() {
   useEffect(() => {
     void loadCollections();
   }, []);
+
+  useEffect(() => {
+    const previews = itemImageFiles.map((file) => ({
+      name: file.name,
+      url: URL.createObjectURL(file)
+    }));
+
+    setItemImagePreviews(previews);
+
+    return () => {
+      previews.forEach((preview) => URL.revokeObjectURL(preview.url));
+    };
+  }, [itemImageFiles]);
 
   const totalItems = useMemo(
     () => collections.reduce((total, collection) => total + collection.itemCount, 0),
@@ -132,19 +152,71 @@ export function App() {
       }));
 
     try {
-      await collectifyClient.addItem(selectedCollection.id, {
+      const created = await collectifyClient.addItem(selectedCollection.id, {
         ...itemForm,
         acquiredAt: itemForm.acquiredAt ? new Date(`${itemForm.acquiredAt}T00:00:00`).toISOString() : null,
         attributes
       });
 
+      for (const [index, file] of itemImageFiles.entries()) {
+        await collectifyClient.uploadItemImage(selectedCollection.id, created.id, file, {
+          isPrimary: index === 0
+        });
+      }
+
       setItemForm(emptyItemForm);
       setAttributeDrafts([{ key: "", value: "" }]);
+      setItemImageFiles([]);
       setItemModalOpen(false);
       await loadCollections(selectedCollection.id);
       setMessage("Elemento aggiunto.");
     } catch {
       setMessage("Creazione elemento non riuscita.");
+    }
+  }
+
+  async function handleUploadImages(itemId: string, files: FileList | null) {
+    if (!selectedCollection || !files?.length) {
+      return;
+    }
+
+    try {
+      for (const file of Array.from(files)) {
+        await collectifyClient.uploadItemImage(selectedCollection.id, itemId, file);
+      }
+
+      await loadCollections(selectedCollection.id);
+      setMessage("Immagine aggiunta.");
+    } catch {
+      setMessage("Upload immagine non riuscito.");
+    }
+  }
+
+  async function handleReplaceImage(itemId: string, imageId: string, files: FileList | null) {
+    if (!selectedCollection || !files?.[0]) {
+      return;
+    }
+
+    try {
+      await collectifyClient.replaceItemImage(selectedCollection.id, itemId, imageId, files[0]);
+      await loadCollections(selectedCollection.id);
+      setMessage("Immagine sostituita.");
+    } catch {
+      setMessage("Sostituzione immagine non riuscita.");
+    }
+  }
+
+  async function handleDeleteImage(itemId: string, imageId: string) {
+    if (!selectedCollection) {
+      return;
+    }
+
+    try {
+      await collectifyClient.deleteItemImage(selectedCollection.id, itemId, imageId);
+      await loadCollections(selectedCollection.id);
+      setMessage("Immagine eliminata.");
+    } catch {
+      setMessage("Eliminazione immagine non riuscita.");
     }
   }
 
@@ -250,7 +322,11 @@ export function App() {
             {selectedCollection?.items.map((item) => (
               <article className="item-row" key={item.id}>
                 <div className="item-row__avatar" aria-hidden="true">
-                  {item.title.slice(0, 1).toUpperCase()}
+                  {item.images[0] ? (
+                    <img src={collectifyClient.resolveAssetUrl(item.images[0].url)} alt="" />
+                  ) : (
+                    item.title.slice(0, 1).toUpperCase()
+                  )}
                 </div>
                 <div className="item-row__content">
                   <div className="item-row__title">
@@ -267,6 +343,37 @@ export function App() {
                       ))}
                     </div>
                   )}
+                  {item.images.length > 0 && (
+                    <div className="image-gallery">
+                      {item.images.map((image) => (
+                        <div className="image-thumb" key={image.id}>
+                          <img src={collectifyClient.resolveAssetUrl(image.url)} alt={image.caption ?? item.title} />
+                          <div className="image-thumb__actions">
+                            <label>
+                              Sostituisci
+                              <input
+                                accept="image/gif,image/jpeg,image/png,image/webp"
+                                type="file"
+                                onChange={(event) => void handleReplaceImage(item.id, image.id, event.currentTarget.files)}
+                              />
+                            </label>
+                            <button type="button" onClick={() => void handleDeleteImage(item.id, image.id)}>
+                              Elimina
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <label className="inline-upload">
+                    Aggiungi immagine
+                    <input
+                      accept="image/gif,image/jpeg,image/png,image/webp"
+                      multiple
+                      type="file"
+                      onChange={(event) => void handleUploadImages(item.id, event.currentTarget.files)}
+                    />
+                  </label>
                 </div>
               </article>
             ))}
@@ -406,6 +513,31 @@ export function App() {
                   />
                 </div>
               ))}
+            </div>
+            <div className="image-picker">
+              <div className="attribute-editor__header">
+                <span>Immagini locali</span>
+                <label>
+                  Scegli
+                  <input
+                    accept="image/gif,image/jpeg,image/png,image/webp"
+                    multiple
+                    type="file"
+                    onChange={(event) => setItemImageFiles(Array.from(event.currentTarget.files ?? []))}
+                  />
+                </label>
+              </div>
+              {itemImagePreviews.length === 0 && <p>Nessuna immagine selezionata.</p>}
+              {itemImagePreviews.length > 0 && (
+                <div className="image-preview-grid">
+                  {itemImagePreviews.map((preview) => (
+                    <figure key={preview.url}>
+                      <img src={preview.url} alt={preview.name} />
+                      <figcaption>{preview.name}</figcaption>
+                    </figure>
+                  ))}
+                </div>
+              )}
             </div>
             <button className="primary-action" type="submit">
               Aggiungi elemento

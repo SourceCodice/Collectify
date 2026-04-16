@@ -1,11 +1,9 @@
 using System.Text.Json;
-using Microsoft.Extensions.Options;
 
 namespace Collectify.Api.Persistence;
 
 public sealed class JsonCollectifyDataStore(
-    IOptions<LocalDataOptions> options,
-    IHostEnvironment environment,
+    LocalDataPathResolver pathResolver,
     ILogger<JsonCollectifyDataStore> logger) : ICollectifyDataStore
 {
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web)
@@ -21,7 +19,7 @@ public sealed class JsonCollectifyDataStore(
 
         try
         {
-            var paths = ResolvePaths();
+            var paths = pathResolver.Resolve();
             Directory.CreateDirectory(paths.RootPath);
             Directory.CreateDirectory(paths.ImagesPath);
 
@@ -75,7 +73,7 @@ public sealed class JsonCollectifyDataStore(
 
         try
         {
-            var paths = ResolvePaths();
+            var paths = pathResolver.Resolve();
             Directory.CreateDirectory(paths.RootPath);
             Directory.CreateDirectory(paths.ImagesPath);
 
@@ -136,19 +134,6 @@ public sealed class JsonCollectifyDataStore(
         }
     }
 
-    private LocalDataPaths ResolvePaths()
-    {
-        var configuredRoot = Environment.ExpandEnvironmentVariables(options.Value.RootPath);
-        var rootPath = Path.IsPathRooted(configuredRoot)
-            ? configuredRoot
-            : Path.GetFullPath(Path.Combine(environment.ContentRootPath, configuredRoot));
-
-        return new LocalDataPaths(
-            rootPath,
-            Path.Combine(rootPath, options.Value.DataFileName),
-            Path.Combine(rootPath, options.Value.ImagesDirectoryName));
-    }
-
     private static void Normalize(CollectifyDataDocument document)
     {
         document.UserProfile ??= new();
@@ -181,6 +166,4 @@ public sealed class JsonCollectifyDataStore(
 
         return Path.Combine(directory, $"{fileName}.corrupt-{timestamp}");
     }
-
-    private sealed record LocalDataPaths(string RootPath, string DataFilePath, string ImagesPath);
 }

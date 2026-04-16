@@ -44,6 +44,7 @@ public static class CollectionMappings
                 attribute.ValueType,
                 attribute.Unit)).ToList(),
             item.TagIds,
+            item.Images.Select(image => image.ToResponse()).ToList(),
             item.ExternalReferences.Select(reference => new ExternalReferenceResponse(
                 reference.Id,
                 reference.Provider,
@@ -51,5 +52,20 @@ public static class CollectionMappings
                 reference.Url,
                 reference.Metadata)).ToList(),
             item.UpdatedAt);
+    }
+
+    public static ItemImageResponse ToResponse(this ItemImage image)
+    {
+        return new ItemImageResponse(
+            image.Id,
+            image.FileName,
+            image.RelativePath,
+            $"/api/assets/{image.RelativePath.Replace('\\', '/')}",
+            image.ContentType,
+            image.SizeBytes,
+            image.Caption,
+            image.IsPrimary,
+            image.CreatedAt,
+            image.UpdatedAt);
     }
 }

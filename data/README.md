@@ -11,7 +11,8 @@ data/
     collectify-data.json.bak      # backup temporaneo durante replace atomico
     collectify-data.json.*.tmp    # file temporanei di scrittura
     collectify-data.json.corrupt-*# copie preservate in caso di JSON corrotto
-    images/                       # immagini locali degli item
+    assets/
+      images/                     # immagini locali degli item
 ```
 
 In produzione il percorso predefinito e' la cartella applicativa locale dell'utente.

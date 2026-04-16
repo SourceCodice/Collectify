@@ -28,6 +28,7 @@ export type CollectionItem = {
   acquiredAt?: string | null;
   attributes: ItemAttribute[];
   tagIds: string[];
+  images: ItemImage[];
   externalReferences: ExternalReference[];
   updatedAt: string;
 };
@@ -47,6 +48,19 @@ export type ExternalReference = {
   externalId?: string | null;
   url?: string | null;
   metadata: Record<string, string>;
+};
+
+export type ItemImage = {
+  id: string;
+  fileName: string;
+  relativePath: string;
+  url: string;
+  contentType: string;
+  sizeBytes: number;
+  caption?: string | null;
+  isPrimary: boolean;
+  createdAt: string;
+  updatedAt: string;
 };
 
 export type CreateCollectionPayload = {

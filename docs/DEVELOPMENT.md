@@ -55,6 +55,7 @@ I dati di sviluppo vengono salvati in:
 
 ```text
 data/dev/collectify-data.json
+data/dev/assets/images/
 ```
 
 Il file viene creato automaticamente al primo avvio. Se il JSON risulta corrotto, viene preservato con suffisso `.corrupt-*` e sostituito da un nuovo documento valido.

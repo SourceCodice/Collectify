@@ -73,6 +73,63 @@ public static class CollectionEndpoints
                 : Results.Created($"/api/collections/{id}/items/{result.Value.Id}", result.Value);
         });
 
+        group.MapPost("/{collectionId:guid}/items/{itemId:guid}/images", async (Guid collectionId, Guid itemId, HttpRequest request, ItemImageApplicationService service, CancellationToken cancellationToken) =>
+        {
+            var formResult = await ReadImageFormAsync(request, cancellationToken);
+            if (!formResult.IsValid)
+            {
+                return Results.ValidationProblem(formResult.Errors);
+            }
+
+            var result = await service.AddImageAsync(
+                collectionId,
+                itemId,
+                formResult.Value!.File,
+                formResult.Value.Caption,
+                formResult.Value.IsPrimary ?? false,
+                cancellationToken);
+
+            if (!result.IsValid)
+            {
+                return Results.ValidationProblem(result.Errors);
+            }
+
+            return result.Value is null
+                ? Results.NotFound()
+                : Results.Created($"/api/collections/{collectionId}/items/{itemId}/images/{result.Value.Id}", result.Value);
+        });
+
+        group.MapPut("/{collectionId:guid}/items/{itemId:guid}/images/{imageId:guid}", async (Guid collectionId, Guid itemId, Guid imageId, HttpRequest request, ItemImageApplicationService service, CancellationToken cancellationToken) =>
+        {
+            var formResult = await ReadImageFormAsync(request, cancellationToken);
+            if (!formResult.IsValid)
+            {
+                return Results.ValidationProblem(formResult.Errors);
+            }
+
+            var result = await service.ReplaceImageAsync(
+                collectionId,
+                itemId,
+                imageId,
+                formResult.Value!.File,
+                formResult.Value.Caption,
+                formResult.Value.IsPrimary,
+                cancellationToken);
+
+            if (!result.IsValid)
+            {
+                return Results.ValidationProblem(result.Errors);
+            }
+
+            return result.Value is null ? Results.NotFound() : Results.Ok(result.Value);
+        });
+
+        group.MapDelete("/{collectionId:guid}/items/{itemId:guid}/images/{imageId:guid}", async (Guid collectionId, Guid itemId, Guid imageId, ItemImageApplicationService service, CancellationToken cancellationToken) =>
+        {
+            var deleted = await service.DeleteImageAsync(collectionId, itemId, imageId, cancellationToken);
+            return deleted ? Results.NoContent() : Results.NotFound();
+        });
+
         group.MapDelete("/{collectionId:guid}/items/{itemId:guid}", async (Guid collectionId, Guid itemId, CollectionApplicationService service, CancellationToken cancellationToken) =>
         {
             var deleted = await service.DeleteItemAsync(collectionId, itemId, cancellationToken);
@@ -81,4 +138,39 @@ public static class CollectionEndpoints
 
         return endpoints;
     }
+
+    private static async Task<ValidationResult<ImageUploadForm>> ReadImageFormAsync(HttpRequest request, CancellationToken cancellationToken)
+    {
+        if (!request.HasFormContentType)
+        {
+            return ValidationResult<ImageUploadForm>.Failure(new Dictionary<string, string[]>
+            {
+                ["contentType"] = ["multipart/form-data content is required."]
+            });
+        }
+
+        var form = await request.ReadFormAsync(cancellationToken);
+        var file = form.Files.GetFile("file");
+
+        if (file is null)
+        {
+            return ValidationResult<ImageUploadForm>.Failure(new Dictionary<string, string[]>
+            {
+                ["file"] = ["Image file is required."]
+            });
+        }
+
+        bool? isPrimary = null;
+        if (bool.TryParse(form["isPrimary"], out var parsedIsPrimary))
+        {
+            isPrimary = parsedIsPrimary;
+        }
+
+        return ValidationResult<ImageUploadForm>.Success(new ImageUploadForm(
+            file,
+            form["caption"].FirstOrDefault(),
+            isPrimary));
+    }
+
+    private sealed record ImageUploadForm(IFormFile File, string? Caption, bool? IsPrimary);
 }

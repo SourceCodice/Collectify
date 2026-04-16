@@ -53,7 +53,21 @@ createdAt
 updatedAt
 ```
 
-Le immagini non vengono salvate dentro il JSON: il modello conserva percorso relativo e metadati, mentre i file immagine vivono nella cartella `images/`.
+Le immagini non vengono salvate dentro il JSON: il modello conserva percorso relativo e metadati, mentre i file immagine vivono nella cartella `assets/images/`.
+
+Esempio:
+
+```json
+{
+  "relativePath": "assets/images/20260416120000000-<guid>.png"
+}
+```
+
+Il file viene servito localmente dal backend tramite:
+
+```text
+/api/assets/assets/images/<file>
+```
 
 ## Scrittura Atomica
 
@@ -65,6 +79,19 @@ Il salvataggio avviene cosi':
 4. rimozione del backup temporaneo.
 
 Questo riduce il rischio di lasciare un file parziale se l'app viene chiusa durante la scrittura.
+
+## Asset Locali
+
+Gli upload immagine usano `multipart/form-data`. Il backend copia il file nella cartella locale dell'app e salva nel JSON solo il riferimento relativo.
+
+Endpoint principali:
+
+- `POST /api/collections/{collectionId}/items/{itemId}/images`
+- `PUT /api/collections/{collectionId}/items/{itemId}/images/{imageId}`
+- `DELETE /api/collections/{collectionId}/items/{itemId}/images/{imageId}`
+- `GET /api/assets/{relativePath}`
+
+I nomi file includono timestamp e `Guid`, cosi' non entrano in collisione con altri upload.
 
 ## File Mancante
 

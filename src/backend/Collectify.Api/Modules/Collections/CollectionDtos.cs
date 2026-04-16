@@ -50,9 +50,22 @@ public sealed record CollectionItemResponse(
     DateTimeOffset? AcquiredAt,
     IReadOnlyList<ItemAttributeResponse> Attributes,
     IReadOnlyList<Guid> TagIds,
+    IReadOnlyList<ItemImageResponse> Images,
     IReadOnlyList<ExternalReferenceResponse> ExternalReferences,
     DateTimeOffset UpdatedAt);
 
 public sealed record ItemAttributeResponse(Guid Id, string Key, string Label, string Value, string ValueType, string? Unit);
 
 public sealed record ExternalReferenceResponse(Guid Id, string Provider, string? ExternalId, string? Url, Dictionary<string, string> Metadata);
+
+public sealed record ItemImageResponse(
+    Guid Id,
+    string FileName,
+    string RelativePath,
+    string Url,
+    string ContentType,
+    long SizeBytes,
+    string? Caption,
+    bool IsPrimary,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset UpdatedAt);
