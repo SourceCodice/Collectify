@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Collectify repository
+    url: https://github.com/SourceCodice/Collectify
+    about: Open the project repository.
