@@ -6,6 +6,13 @@ import type {
   CreateCollectionPayload,
   CreateItemPayload
 } from "../../features/collections/types";
+import type {
+  ExternalMetadataDetails,
+  ExternalMetadataKind,
+  ExternalMetadataSearchResult,
+  ImportExternalItemPayload,
+  ImportedExternalItem
+} from "../../features/externalMetadata/types";
 
 const apiBaseUrl = import.meta.env.VITE_COLLECTIFY_API_URL ?? "http://localhost:5088";
 
@@ -61,6 +68,10 @@ function buildImageFormData(file: File, options?: { caption?: string; isPrimary?
   return formData;
 }
 
+function externalMetadataPath(kind: ExternalMetadataKind) {
+  return kind === "movie" ? "movies" : kind === "game" ? "games" : "albums";
+}
+
 export const collectifyClient = {
   apiBaseUrl,
   resolveAssetUrl: (url: string) => (url.startsWith("http") ? url : `${apiBaseUrl}${url}`),
@@ -97,5 +108,18 @@ export const collectifyClient = {
   deleteItemImage: (collectionId: string, itemId: string, imageId: string) =>
     requestNoContent(`/api/collections/${collectionId}/items/${itemId}/images/${imageId}`, {
       method: "DELETE"
+    }),
+  searchExternalMetadata: (kind: ExternalMetadataKind, query: string) =>
+    request<ExternalMetadataSearchResult[]>(
+      `/api/external/${externalMetadataPath(kind)}/search?query=${encodeURIComponent(query)}`
+    ),
+  getExternalMetadataDetails: (kind: ExternalMetadataKind, externalId: string) =>
+    request<ExternalMetadataDetails>(
+      `/api/external/${externalMetadataPath(kind)}/${encodeURIComponent(externalId)}`
+    ),
+  importExternalItem: (payload: ImportExternalItemPayload) =>
+    request<ImportedExternalItem>("/api/external/import", {
+      method: "POST",
+      body: JSON.stringify(payload)
     })
 };

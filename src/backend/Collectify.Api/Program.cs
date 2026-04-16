@@ -1,8 +1,10 @@
 using Collectify.Api.DevTools;
 using Collectify.Api.Modules.Collections;
+using Collectify.Api.Modules.ExternalMetadata;
 using Collectify.Api.Persistence;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Configuration.AddJsonFile("appsettings.Local.json", optional: true, reloadOnChange: true);
 
 builder.Services.AddCors(options =>
 {
@@ -16,11 +18,21 @@ builder.Services.AddCors(options =>
 });
 
 builder.Services.Configure<LocalDataOptions>(builder.Configuration.GetSection("LocalData"));
+builder.Services.Configure<ExternalMetadataOptions>(builder.Configuration.GetSection("ExternalMetadata"));
+builder.Services.AddHttpClient("ExternalMetadata", client =>
+{
+    client.DefaultRequestHeaders.UserAgent.ParseAdd("Collectify/0.1");
+    client.Timeout = TimeSpan.FromSeconds(20);
+});
 builder.Services.AddSingleton<LocalDataPathResolver>();
 builder.Services.AddSingleton<ICollectifyDataStore, JsonCollectifyDataStore>();
 builder.Services.AddSingleton<ICollectionRepository, JsonCollectionRepository>();
 builder.Services.AddSingleton<CollectionApplicationService>();
 builder.Services.AddSingleton<ItemImageApplicationService>();
+builder.Services.AddSingleton<IExternalMetadataProvider, TmdbMetadataProvider>();
+builder.Services.AddSingleton<IExternalMetadataProvider, RawgMetadataProvider>();
+builder.Services.AddSingleton<IExternalMetadataProvider, DiscogsMetadataProvider>();
+builder.Services.AddSingleton<ExternalMetadataApplicationService>();
 builder.Services.AddSingleton<IUserProfileRepository, JsonUserProfileRepository>();
 builder.Services.AddSingleton<ICollectionCategoryRepository, JsonCollectionCategoryRepository>();
 builder.Services.AddSingleton<ITagRepository, JsonTagRepository>();
@@ -50,6 +62,7 @@ app.MapGet("/health", () => Results.Ok(new
 
 app.MapCollectionEndpoints();
 app.MapAssetEndpoints();
+app.MapExternalMetadataEndpoints();
 
 app.Run();
 

@@ -224,9 +224,7 @@ export function App() {
     <div className="app-shell">
       <aside className="sidebar">
         <div className="sidebar__brand">
-          <div className="brand-mark" aria-hidden="true">
-            C
-          </div>
+          <img className="brand-mark" src="/collectify-logo.png" alt="" aria-hidden="true" />
           <div>
             <strong>Collectify</strong>
             <span>{collections.length} collezioni</span>

@@ -93,6 +93,10 @@ Endpoint principali:
 
 I nomi file includono timestamp e `Guid`, cosi' non entrano in collisione con altri upload.
 
+## Metadati Esterni
+
+I dati importati da TMDb, RAWG e Discogs vengono convertiti in `ItemAttribute` ed `ExternalReference` prima del salvataggio locale. Le chiavi API restano nel backend e il frontend non chiama mai direttamente i provider esterni.
+
 ## File Mancante
 
 Se il file JSON non esiste, viene creato un documento iniziale con dati seed minimi.

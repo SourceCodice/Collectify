@@ -61,3 +61,9 @@ data/dev/assets/images/
 Il file viene creato automaticamente al primo avvio. Se il JSON risulta corrotto, viene preservato con suffisso `.corrupt-*` e sostituito da un nuovo documento valido.
 
 Per il modello dati completo vedi [DATA_MODEL.md](DATA_MODEL.md).
+
+## Servizi esterni
+
+Le chiavi API per TMDb, RAWG e Discogs vanno configurate in `src/backend/Collectify.Api/appsettings.Local.json`, partendo da `appsettings.Local.example.json`. Il file locale non deve essere versionato.
+
+Gli endpoint disponibili sono documentati in [EXTERNAL_METADATA.md](EXTERNAL_METADATA.md).

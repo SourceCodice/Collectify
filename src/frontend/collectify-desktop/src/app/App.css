@@ -42,15 +42,10 @@
 }
 
 .brand-mark {
-  align-items: center;
-  background: #5865f2;
+  background: #10140f;
   border-radius: 8px;
-  color: #ffffff;
-  display: grid;
-  font-size: 1.25rem;
-  font-weight: 800;
   height: 44px;
-  justify-content: center;
+  object-fit: cover;
   width: 44px;
 }
 

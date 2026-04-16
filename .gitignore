@@ -39,6 +39,7 @@ electron-builder.env
 .env
 .env.local
 .env.*.local
+appsettings.Local.json
 data/dev/
 *.db
 *.db-shm
