@@ -1,115 +1,51 @@
 # Collectify
 
-Collectify e' un'app desktop per gestire collezioni personali di qualsiasi tipo: film, videogiochi, auto, piante, mobili, libri e categorie personalizzate.
+Collectify e' un'app desktop pensata per organizzare collezioni personali di qualsiasi tipo.
 
-Il progetto usa un backend .NET 8 Web API e un frontend Electron + React + TypeScript. In sviluppo non richiede un database: i dati sono gestiti da un repository in memoria, pensato per prototipare rapidamente dominio, API e interfaccia.
+Che tu voglia tenere traccia di film, videogiochi, libri, auto, piante, mobili, oggetti da collezione o categorie completamente personalizzate, Collectify ti aiuta a raccogliere tutto in un unico spazio ordinato.
 
-## Funzionalita iniziali
+## Cosa Puoi Fare
 
-- Dashboard desktop Electron.
-- Lista collezioni con dati seed.
-- Creazione di nuove collezioni.
-- API REST per collezioni e oggetti.
-- Avvio locale con backend come punto d'ingresso.
-- Configurazione pronta per GitHub, CI e aggiornamenti dipendenze.
+- Creare collezioni diverse per ogni passione o ambito personale.
+- Organizzare oggetti, note e informazioni importanti.
+- Tenere sotto controllo quante cose possiedi in ogni collezione.
+- Separare raccolte molto diverse tra loro, senza dover usare app differenti.
+- Costruire un archivio personale semplice da consultare e aggiornare.
 
-## Struttura
+## Esempi Di Collezioni
 
-```text
-Collectify/
-  src/
-    backend/
-      Collectify.Api/              # .NET 8 Web API
-        Modules/Collections/       # Primo modulo verticale
-    frontend/
-      collectify-desktop/          # Electron + React + TypeScript
-        electron/                  # Main process e preload
-        src/app/                   # Shell applicativa
-        src/features/collections/  # UI e tipi del modulo collezioni
-        src/shared/api/            # Client HTTP verso il backend
-  scripts/
-    dev.ps1                        # Avvio locale guidato
-```
+- Film preferiti, DVD, Blu-ray e contenuti digitali.
+- Videogiochi fisici e digitali.
+- Libri letti, da leggere o da acquistare.
+- Piante di casa, con note sulla cura.
+- Auto, modellini o veicoli da sogno.
+- Mobili, arredi e oggetti per la casa.
+- Qualsiasi categoria personalizzata.
 
-## Avvio locale
+## Perche' Usarlo
 
-Installa le dipendenze frontend una sola volta:
+Collectify nasce per chi vuole avere memoria e controllo sui propri oggetti, senza fogli sparsi, note confuse o liste separate.
 
-```powershell
-cd .\src\frontend\collectify-desktop
-npm.cmd install
-```
+L'obiettivo e' offrire un'esperienza semplice, ordinata e flessibile: una collezione puo' essere molto essenziale oppure diventare nel tempo un archivio ricco di dettagli.
 
-Poi avvia Collectify dalla root:
+## Stato Del Progetto
 
-```powershell
-.\scripts\dev.ps1
-```
+Collectify e' nelle prime fasi di sviluppo. La versione attuale introduce le basi dell'applicazione:
 
-Oppure avvia direttamente il backend:
+- una schermata principale per visualizzare le collezioni;
+- la possibilita' di creare nuove collezioni;
+- una struttura pensata per supportare in futuro dettagli, immagini, filtri, ricerca e statistiche.
 
-```powershell
-dotnet run --project .\src\backend\Collectify.Api\Collectify.Api.csproj --launch-profile Collectify.Api
-```
+## Idee Future
 
-In ambiente `Development` il backend prova ad avviare automaticamente anche il frontend Electron. Se il renderer Vite non e' gia' attivo, esegue `npm.cmd run dev`; se Vite e' gia' attivo, apre solo la finestra Electron.
-
-Comandi frontend manuali:
-
-```powershell
-cd .\src\frontend\collectify-desktop
-npm.cmd run dev
-npm.cmd run build
-```
-
-Endpoint utili:
-
-- API: `http://localhost:5088`
-- Health check: `http://localhost:5088/health`
-- Electron renderer: `http://127.0.0.1:5173`
-
-## Stato attuale
-
-- Backend .NET 8 con Minimal API.
-- Modulo `Collections` con CRUD di base per collezioni e oggetti.
-- Repository in memoria con dati seed per lo sviluppo.
-- Frontend Electron + React + TypeScript con dashboard, lista collezioni e creazione collezione.
-- CORS configurato per il renderer Vite locale.
-
-## Verifiche
-
-Backend:
-
-```powershell
-dotnet build .\Collectify.sln
-```
-
-Frontend:
-
-```powershell
-cd .\src\frontend\collectify-desktop
-npm.cmd run build
-```
-
-## Sviluppo senza database
-
-Per questa fase ti consiglio questo ordine:
-
-1. `InMemoryCollectionRepository`, gia' incluso: velocissimo per prototipare dominio, API e UI. Ogni riavvio resetta i dati.
-2. File JSON locale: stessa interfaccia repository, ma persistenza su `data/dev/collections.json` o su `%APPDATA%/Collectify`. E' leggibile, versionabile in esempi e perfetto prima di introdurre migrazioni.
-3. IndexedDB/localStorage nel renderer: utile per esperimenti solo frontend, ma meno adatto se il backend deve restare la fonte dei dati.
-4. SQLite quando il modello dati si stabilizza: e' un database embedded, non richiede server e si integra bene con app desktop.
-5. LiteDB come alternativa documentale embedded per .NET: comoda per oggetti flessibili, ma aggiunge una dipendenza NuGet.
-
-La scelta piu' naturale per il prossimo passo e' aggiungere un `JsonCollectionRepository` dietro la stessa `ICollectionRepository`, selezionabile da configurazione.
-
-## Documentazione
-
-- [Sviluppo locale](docs/DEVELOPMENT.md)
-- [Architettura](docs/ARCHITECTURE.md)
-- [Contribuire](CONTRIBUTING.md)
-- [Sicurezza](SECURITY.md)
+- Schede dettagliate per ogni oggetto.
+- Immagini e copertine.
+- Ricerca e filtri avanzati.
+- Categorie e campi personalizzati.
+- Esportazione dei dati.
+- Backup locale.
+- Statistiche sulle collezioni.
 
 ## Licenza
 
-Collectify e' distribuito con licenza MIT. Vedi [LICENSE](LICENSE).
+Collectify e' distribuito con licenza MIT.
