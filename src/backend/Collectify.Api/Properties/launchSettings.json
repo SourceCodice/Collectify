@@ -1,0 +1,37 @@
+{
+  "profiles": {
+    "Collectify.Api": {
+      "commandName": "Project",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "Development__OpenFrontendOnStart": "true",
+        "Development__AutoStartFrontend": "true",
+        "Development__FrontendLaunchMode": "Electron",
+        "Development__FrontendUrl": "http://127.0.0.1:5173",
+        "Development__FrontendProjectPath": "..\\..\\frontend\\collectify-desktop",
+        "Development__FrontendStartArguments": "run dev",
+        "Development__RendererStartArguments": "run dev:renderer",
+        "Development__ElectronStartArguments": "run electron:open",
+        "Development__FrontendStartupTimeoutSeconds": "45"
+      },
+      "dotnetRunMessages": true,
+      "applicationUrl": "http://localhost:5088"
+    },
+    "IIS Express": {
+      "commandName": "IISExpress",
+      "launchBrowser": true,
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      }
+    }
+  },
+  "$schema": "https://json.schemastore.org/launchsettings.json",
+  "iisSettings": {
+    "windowsAuthentication": false,
+    "anonymousAuthentication": true,
+    "iisExpress": {
+      "applicationUrl": "http://localhost:50570/",
+      "sslPort": 44357
+    }
+  }
+}

@@ -1,0 +1,20 @@
+@Collectify.Api_HostAddress = http://localhost:5088
+
+GET {{Collectify.Api_HostAddress}}/health
+Accept: application/json
+
+###
+
+GET {{Collectify.Api_HostAddress}}/api/collections
+Accept: application/json
+
+###
+
+POST {{Collectify.Api_HostAddress}}/api/collections
+Content-Type: application/json
+
+{
+  "name": "Libreria personale",
+  "type": "Books",
+  "description": "Romanzi, saggi e manuali tecnici"
+}
