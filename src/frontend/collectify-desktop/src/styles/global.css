@@ -1,5 +1,5 @@
 :root {
-  color-scheme: light;
+  color-scheme: dark;
   font-family:
     Inter,
     ui-sans-serif,
@@ -17,7 +17,7 @@
 }
 
 html {
-  background: #f6f2ea;
+  background: #111214;
 }
 
 body {
@@ -32,10 +32,17 @@ textarea {
   letter-spacing: 0;
 }
 
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
+}
+
 button:focus-visible,
 input:focus-visible,
 select:focus-visible,
 textarea:focus-visible {
-  outline: 3px solid #e2b84d;
+  outline: 3px solid #5865f2;
   outline-offset: 2px;
 }

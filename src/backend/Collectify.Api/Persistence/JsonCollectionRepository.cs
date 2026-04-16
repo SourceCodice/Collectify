@@ -19,20 +19,9 @@ public sealed class JsonCollectionRepository(ICollectifyDataStore dataStore) : I
         return document.Collections.FirstOrDefault(collection => collection.Id == id);
     }
 
-    public async Task<Collection> CreateAsync(CreateCollectionRequest request, CancellationToken cancellationToken)
+    public async Task<Collection> AddAsync(Collection collection, CancellationToken cancellationToken)
     {
         var document = await dataStore.LoadAsync(cancellationToken);
-        var now = DateTimeOffset.UtcNow;
-
-        var collection = new Collection
-        {
-            Id = Guid.NewGuid(),
-            Name = request.Name.Trim(),
-            Type = request.Type.Trim(),
-            Description = Normalize(request.Description),
-            CreatedAt = now,
-            UpdatedAt = now
-        };
 
         document.Collections.Add(collection);
         await dataStore.SaveAsync(document, cancellationToken);
@@ -40,20 +29,18 @@ public sealed class JsonCollectionRepository(ICollectifyDataStore dataStore) : I
         return collection;
     }
 
-    public async Task<Collection?> UpdateAsync(Guid id, UpdateCollectionRequest request, CancellationToken cancellationToken)
+    public async Task<Collection?> SaveAsync(Collection collection, CancellationToken cancellationToken)
     {
         var document = await dataStore.LoadAsync(cancellationToken);
-        var collection = document.Collections.FirstOrDefault(current => current.Id == id);
+        var existing = document.Collections.FirstOrDefault(current => current.Id == collection.Id);
 
-        if (collection is null)
+        if (existing is null)
         {
             return null;
         }
 
-        collection.Name = request.Name.Trim();
-        collection.Type = request.Type.Trim();
-        collection.Description = Normalize(request.Description);
-        collection.UpdatedAt = DateTimeOffset.UtcNow;
+        var index = document.Collections.IndexOf(existing);
+        document.Collections[index] = collection;
 
         await dataStore.SaveAsync(document, cancellationToken);
         return collection;
@@ -72,7 +59,7 @@ public sealed class JsonCollectionRepository(ICollectifyDataStore dataStore) : I
         return deleted;
     }
 
-    public async Task<Item?> AddItemAsync(Guid collectionId, AddCollectionItemRequest request, CancellationToken cancellationToken)
+    public async Task<Item?> AddItemAsync(Guid collectionId, Item item, CancellationToken cancellationToken)
     {
         var document = await dataStore.LoadAsync(cancellationToken);
         var collection = document.Collections.FirstOrDefault(current => current.Id == collectionId);
@@ -82,25 +69,9 @@ public sealed class JsonCollectionRepository(ICollectifyDataStore dataStore) : I
             return null;
         }
 
-        var now = DateTimeOffset.UtcNow;
-        var item = new Item
-        {
-            Id = Guid.NewGuid(),
-            CollectionId = collectionId,
-            Title = request.Title.Trim(),
-            Description = Normalize(request.Description),
-            Notes = Normalize(request.Notes),
-            Condition = string.IsNullOrWhiteSpace(request.Condition) ? "Non specificato" : request.Condition.Trim(),
-            AcquiredAt = request.AcquiredAt,
-            Attributes = BuildAttributes(request.Attributes, now),
-            TagIds = request.TagIds?.Distinct().ToList() ?? [],
-            ExternalReferences = BuildExternalReferences(request.ExternalReferences, now),
-            CreatedAt = now,
-            UpdatedAt = now
-        };
-
+        item.CollectionId = collectionId;
         collection.Items.Add(item);
-        collection.UpdatedAt = now;
+        collection.UpdatedAt = item.UpdatedAt;
 
         await dataStore.SaveAsync(document, cancellationToken);
         return item;
@@ -127,53 +98,4 @@ public sealed class JsonCollectionRepository(ICollectifyDataStore dataStore) : I
         return deleted;
     }
 
-    private static List<ItemAttribute> BuildAttributes(IReadOnlyList<ItemAttributeRequest>? requests, DateTimeOffset now)
-    {
-        if (requests is null)
-        {
-            return [];
-        }
-
-        return requests
-            .Where(request => !string.IsNullOrWhiteSpace(request.Key))
-            .Select(request => new ItemAttribute
-            {
-                Id = Guid.NewGuid(),
-                Key = request.Key.Trim(),
-                Label = string.IsNullOrWhiteSpace(request.Label) ? request.Key.Trim() : request.Label.Trim(),
-                Value = request.Value.Trim(),
-                ValueType = string.IsNullOrWhiteSpace(request.ValueType) ? "Text" : request.ValueType.Trim(),
-                Unit = Normalize(request.Unit),
-                CreatedAt = now,
-                UpdatedAt = now
-            })
-            .ToList();
-    }
-
-    private static List<ExternalReference> BuildExternalReferences(IReadOnlyList<ExternalReferenceRequest>? requests, DateTimeOffset now)
-    {
-        if (requests is null)
-        {
-            return [];
-        }
-
-        return requests
-            .Where(request => !string.IsNullOrWhiteSpace(request.Provider))
-            .Select(request => new ExternalReference
-            {
-                Id = Guid.NewGuid(),
-                Provider = request.Provider.Trim(),
-                ExternalId = Normalize(request.ExternalId),
-                Url = Normalize(request.Url),
-                Metadata = request.Metadata ?? [],
-                CreatedAt = now,
-                UpdatedAt = now
-            })
-            .ToList();
-    }
-
-    private static string? Normalize(string? value)
-    {
-        return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
-    }
 }

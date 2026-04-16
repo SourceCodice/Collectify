@@ -7,66 +7,75 @@ public static class CollectionEndpoints
         var group = endpoints.MapGroup("/api/collections")
             .WithTags("Collections");
 
-        group.MapGet("/", async (ICollectionRepository repository, CancellationToken cancellationToken) =>
+        group.MapGet("/", async (CollectionApplicationService service, CancellationToken cancellationToken) =>
         {
-            var collections = await repository.ListAsync(cancellationToken);
-            return Results.Ok(collections.Select(collection => collection.ToSummaryResponse()));
+            var collections = await service.ListCollectionsAsync(cancellationToken);
+            return Results.Ok(collections);
         });
 
-        group.MapGet("/{id:guid}", async (Guid id, ICollectionRepository repository, CancellationToken cancellationToken) =>
+        group.MapGet("/{id:guid}", async (Guid id, CollectionApplicationService service, CancellationToken cancellationToken) =>
         {
-            var collection = await repository.GetAsync(id, cancellationToken);
+            var collection = await service.GetCollectionAsync(id, cancellationToken);
             return collection is null
                 ? Results.NotFound()
-                : Results.Ok(collection.ToDetailResponse());
+                : Results.Ok(collection);
         });
 
-        group.MapPost("/", async (CreateCollectionRequest request, ICollectionRepository repository, CancellationToken cancellationToken) =>
+        group.MapGet("/{id:guid}/items", async (Guid id, CollectionApplicationService service, CancellationToken cancellationToken) =>
         {
-            if (string.IsNullOrWhiteSpace(request.Name) || string.IsNullOrWhiteSpace(request.Type))
+            var items = await service.ListItemsAsync(id, cancellationToken);
+            return items is null ? Results.NotFound() : Results.Ok(items);
+        });
+
+        group.MapGet("/{collectionId:guid}/items/{itemId:guid}", async (Guid collectionId, Guid itemId, CollectionApplicationService service, CancellationToken cancellationToken) =>
+        {
+            var item = await service.GetItemAsync(collectionId, itemId, cancellationToken);
+            return item is null ? Results.NotFound() : Results.Ok(item);
+        });
+
+        group.MapPost("/", async (CreateCollectionRequest request, CollectionApplicationService service, CancellationToken cancellationToken) =>
+        {
+            var result = await service.CreateCollectionAsync(request, cancellationToken);
+            return result.IsValid
+                ? Results.Created($"/api/collections/{result.Value!.Id}", result.Value)
+                : Results.ValidationProblem(result.Errors);
+        });
+
+        group.MapPut("/{id:guid}", async (Guid id, UpdateCollectionRequest request, CollectionApplicationService service, CancellationToken cancellationToken) =>
+        {
+            var result = await service.UpdateCollectionAsync(id, request, cancellationToken);
+
+            if (!result.IsValid)
             {
-                return Results.BadRequest(new { message = "Name and type are required." });
+                return Results.ValidationProblem(result.Errors);
             }
 
-            var collection = await repository.CreateAsync(request, cancellationToken);
-            return Results.Created($"/api/collections/{collection.Id}", collection.ToDetailResponse());
+            return result.Value is null ? Results.NotFound() : Results.Ok(result.Value);
         });
 
-        group.MapPut("/{id:guid}", async (Guid id, UpdateCollectionRequest request, ICollectionRepository repository, CancellationToken cancellationToken) =>
+        group.MapDelete("/{id:guid}", async (Guid id, CollectionApplicationService service, CancellationToken cancellationToken) =>
         {
-            if (string.IsNullOrWhiteSpace(request.Name) || string.IsNullOrWhiteSpace(request.Type))
-            {
-                return Results.BadRequest(new { message = "Name and type are required." });
-            }
-
-            var collection = await repository.UpdateAsync(id, request, cancellationToken);
-            return collection is null
-                ? Results.NotFound()
-                : Results.Ok(collection.ToDetailResponse());
-        });
-
-        group.MapDelete("/{id:guid}", async (Guid id, ICollectionRepository repository, CancellationToken cancellationToken) =>
-        {
-            var deleted = await repository.DeleteAsync(id, cancellationToken);
+            var deleted = await service.DeleteCollectionAsync(id, cancellationToken);
             return deleted ? Results.NoContent() : Results.NotFound();
         });
 
-        group.MapPost("/{id:guid}/items", async (Guid id, AddCollectionItemRequest request, ICollectionRepository repository, CancellationToken cancellationToken) =>
+        group.MapPost("/{id:guid}/items", async (Guid id, AddCollectionItemRequest request, CollectionApplicationService service, CancellationToken cancellationToken) =>
         {
-            if (string.IsNullOrWhiteSpace(request.Title))
+            var result = await service.AddItemAsync(id, request, cancellationToken);
+
+            if (!result.IsValid)
             {
-                return Results.BadRequest(new { message = "Title is required." });
+                return Results.ValidationProblem(result.Errors);
             }
 
-            var item = await repository.AddItemAsync(id, request, cancellationToken);
-            return item is null
+            return result.Value is null
                 ? Results.NotFound()
-                : Results.Created($"/api/collections/{id}/items/{item.Id}", item.ToResponse());
+                : Results.Created($"/api/collections/{id}/items/{result.Value.Id}", result.Value);
         });
 
-        group.MapDelete("/{collectionId:guid}/items/{itemId:guid}", async (Guid collectionId, Guid itemId, ICollectionRepository repository, CancellationToken cancellationToken) =>
+        group.MapDelete("/{collectionId:guid}/items/{itemId:guid}", async (Guid collectionId, Guid itemId, CollectionApplicationService service, CancellationToken cancellationToken) =>
         {
-            var deleted = await repository.DeleteItemAsync(collectionId, itemId, cancellationToken);
+            var deleted = await service.DeleteItemAsync(collectionId, itemId, cancellationToken);
             return deleted ? Results.NoContent() : Results.NotFound();
         });
 

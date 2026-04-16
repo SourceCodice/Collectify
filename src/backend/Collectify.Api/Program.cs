@@ -18,6 +18,7 @@ builder.Services.AddCors(options =>
 builder.Services.Configure<LocalDataOptions>(builder.Configuration.GetSection("LocalData"));
 builder.Services.AddSingleton<ICollectifyDataStore, JsonCollectifyDataStore>();
 builder.Services.AddSingleton<ICollectionRepository, JsonCollectionRepository>();
+builder.Services.AddSingleton<CollectionApplicationService>();
 builder.Services.AddSingleton<IUserProfileRepository, JsonUserProfileRepository>();
 builder.Services.AddSingleton<ICollectionCategoryRepository, JsonCollectionCategoryRepository>();
 builder.Services.AddSingleton<ITagRepository, JsonTagRepository>();

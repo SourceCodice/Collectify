@@ -1,4 +1,10 @@
-import type { CollectionSummary, CreateCollectionPayload } from "../../features/collections/types";
+import type {
+  CollectionDetail,
+  CollectionItem,
+  CollectionSummary,
+  CreateCollectionPayload,
+  CreateItemPayload
+} from "../../features/collections/types";
 
 const apiBaseUrl = import.meta.env.VITE_COLLECTIFY_API_URL ?? "http://localhost:5088";
 
@@ -21,8 +27,14 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 export const collectifyClient = {
   apiBaseUrl,
   listCollections: () => request<CollectionSummary[]>("/api/collections"),
+  getCollection: (id: string) => request<CollectionDetail>(`/api/collections/${id}`),
   createCollection: (payload: CreateCollectionPayload) =>
-    request<CollectionSummary>("/api/collections", {
+    request<CollectionDetail>("/api/collections", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    }),
+  addItem: (collectionId: string, payload: CreateItemPayload) =>
+    request<CollectionItem>(`/api/collections/${collectionId}/items`, {
       method: "POST",
       body: JSON.stringify(payload)
     })

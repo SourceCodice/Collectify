@@ -1,35 +1,84 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { CollectionCard } from "../features/collections/CollectionCard";
 import { collectionTypeLabels, collectionTypes } from "../features/collections/CollectionTypeCatalog";
-import type { CollectionSummary, CreateCollectionPayload } from "../features/collections/types";
+import type {
+  CollectionDetail,
+  CollectionSummary,
+  CreateCollectionPayload,
+  CreateItemPayload
+} from "../features/collections/types";
 import { collectifyClient } from "../shared/api/collectifyClient";
 import "./App.css";
 
 type LoadState = "idle" | "loading" | "ready" | "error";
 
-const emptyForm: CreateCollectionPayload = {
+type AttributeDraft = {
+  key: string;
+  value: string;
+};
+
+const emptyCollectionForm: CreateCollectionPayload = {
   name: "",
   type: "Custom",
-  description: ""
+  description: "",
+  categoryId: null
+};
+
+const emptyItemForm: CreateItemPayload = {
+  title: "",
+  description: "",
+  notes: "",
+  condition: "Non specificato",
+  acquiredAt: null,
+  attributes: [],
+  externalReferences: []
 };
 
 export function App() {
   const [collections, setCollections] = useState<CollectionSummary[]>([]);
-  const [form, setForm] = useState<CreateCollectionPayload>(emptyForm);
+  const [selectedCollection, setSelectedCollection] = useState<CollectionDetail | null>(null);
   const [loadState, setLoadState] = useState<LoadState>("idle");
-  const [message, setMessage] = useState<string>("Pronto");
+  const [message, setMessage] = useState("Pronto");
+  const [collectionModalOpen, setCollectionModalOpen] = useState(false);
+  const [itemModalOpen, setItemModalOpen] = useState(false);
+  const [collectionForm, setCollectionForm] = useState<CreateCollectionPayload>(emptyCollectionForm);
+  const [itemForm, setItemForm] = useState<CreateItemPayload>(emptyItemForm);
+  const [attributeDrafts, setAttributeDrafts] = useState<AttributeDraft[]>([{ key: "", value: "" }]);
 
-  async function loadCollections() {
+  async function loadCollections(preferredCollectionId?: string) {
     setLoadState("loading");
 
     try {
       const data = await collectifyClient.listCollections();
       setCollections(data);
+
+      const targetId = preferredCollectionId ?? selectedCollection?.id ?? data[0]?.id;
+      if (targetId) {
+        await openCollection(targetId, false);
+      } else {
+        setSelectedCollection(null);
+      }
+
       setLoadState("ready");
-      setMessage(`API collegata: ${collectifyClient.apiBaseUrl}`);
+      setMessage("Archivio sincronizzato");
     } catch {
       setLoadState("error");
       setMessage(`API non raggiungibile: ${collectifyClient.apiBaseUrl}`);
+    }
+  }
+
+  async function openCollection(id: string, setBusy = true) {
+    if (setBusy) {
+      setLoadState("loading");
+    }
+
+    try {
+      const detail = await collectifyClient.getCollection(id);
+      setSelectedCollection(detail);
+      setLoadState("ready");
+      setMessage(`Collezione aperta: ${detail.name}`);
+    } catch {
+      setLoadState("error");
+      setMessage("Non riesco ad aprire la collezione.");
     }
   }
 
@@ -45,80 +94,208 @@ export function App() {
   async function handleCreateCollection(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    if (!form.name.trim()) {
+    if (!collectionForm.name.trim()) {
       setMessage("Inserisci un nome per la collezione.");
       return;
     }
 
     try {
-      await collectifyClient.createCollection(form);
-      setForm(emptyForm);
-      await loadCollections();
+      const created = await collectifyClient.createCollection(collectionForm);
+      setCollectionForm(emptyCollectionForm);
+      setCollectionModalOpen(false);
+      await loadCollections(created.id);
       setMessage("Collezione creata.");
     } catch {
-      setMessage("Creazione non riuscita. Controlla che il backend sia avviato.");
+      setMessage("Creazione collezione non riuscita.");
+    }
+  }
+
+  async function handleCreateItem(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!selectedCollection) {
+      return;
+    }
+
+    if (!itemForm.title?.trim()) {
+      setMessage("Inserisci un titolo per l'elemento.");
+      return;
+    }
+
+    const attributes = attributeDrafts
+      .filter((attribute) => attribute.key.trim() || attribute.value.trim())
+      .map((attribute) => ({
+        key: attribute.key.trim(),
+        label: attribute.key.trim(),
+        value: attribute.value.trim(),
+        valueType: "Text"
+      }));
+
+    try {
+      await collectifyClient.addItem(selectedCollection.id, {
+        ...itemForm,
+        acquiredAt: itemForm.acquiredAt ? new Date(`${itemForm.acquiredAt}T00:00:00`).toISOString() : null,
+        attributes
+      });
+
+      setItemForm(emptyItemForm);
+      setAttributeDrafts([{ key: "", value: "" }]);
+      setItemModalOpen(false);
+      await loadCollections(selectedCollection.id);
+      setMessage("Elemento aggiunto.");
+    } catch {
+      setMessage("Creazione elemento non riuscita.");
     }
   }
 
   return (
     <div className="app-shell">
-      <header className="topbar">
-        <div className="brand-mark" aria-hidden="true">
-          C
-        </div>
-        <div>
-          <span className="eyebrow">Collectify</span>
-          <h1>Archivio personale</h1>
-        </div>
-        <div className={`connection-pill connection-pill--${loadState}`}>
-          <span aria-hidden="true" />
-          {message}
-        </div>
-      </header>
-
-      <main className="workspace">
-        <section className="overview-panel" aria-label="Panoramica">
-          <div>
-            <p className="eyebrow">Dashboard</p>
-            <h2>Organizza ogni collezione con lo stesso metodo.</h2>
+      <aside className="sidebar">
+        <div className="sidebar__brand">
+          <div className="brand-mark" aria-hidden="true">
+            C
           </div>
-          <div className="stats-grid">
+          <div>
+            <strong>Collectify</strong>
+            <span>{collections.length} collezioni</span>
+          </div>
+        </div>
+
+        <button className="primary-action" type="button" onClick={() => setCollectionModalOpen(true)}>
+          <span aria-hidden="true">+</span>
+          Nuova collezione
+        </button>
+
+        <nav className="collection-nav" aria-label="Collezioni">
+          {collections.map((collection) => (
+            <button
+              className={collection.id === selectedCollection?.id ? "collection-nav__item is-active" : "collection-nav__item"}
+              key={collection.id}
+              type="button"
+              onClick={() => void openCollection(collection.id)}
+            >
+              <span className="collection-nav__icon" aria-hidden="true">
+                {collection.name.slice(0, 1).toUpperCase()}
+              </span>
+              <span>
+                <strong>{collection.name}</strong>
+                <small>{collection.itemCount} elementi</small>
+              </span>
+            </button>
+          ))}
+        </nav>
+      </aside>
+
+      <main className="main-panel">
+        <header className="topbar">
+          <div>
+            <p className="eyebrow">Archivio personale</p>
+            <h1>{selectedCollection?.name ?? "Le tue collezioni"}</h1>
+          </div>
+          <div className={`connection-pill connection-pill--${loadState}`}>
+            <span aria-hidden="true" />
+            {message}
+          </div>
+        </header>
+
+        <section className="hero-panel">
+          <div>
+            <span className="type-pill">{selectedCollection ? collectionTypeLabels[selectedCollection.type] ?? selectedCollection.type : "Workspace"}</span>
+            <h2>{selectedCollection?.description || "Seleziona una collezione o creane una nuova per iniziare."}</h2>
+          </div>
+          <div className="metrics">
             <div>
               <strong>{collections.length}</strong>
               <span>collezioni</span>
             </div>
             <div>
               <strong>{totalItems}</strong>
-              <span>oggetti</span>
+              <span>elementi totali</span>
             </div>
             <div>
-              <strong>{window.collectify?.platform ?? "web"}</strong>
-              <span>runtime</span>
+              <strong>{selectedCollection?.items.length ?? 0}</strong>
+              <span>in questa vista</span>
             </div>
           </div>
         </section>
 
-        <section className="content-grid">
-          <form className="collection-form" onSubmit={handleCreateCollection}>
-            <div className="form-header">
-              <span className="eyebrow">Nuova</span>
-              <h2>Collezione</h2>
+        <section className="items-section">
+          <div className="section-heading">
+            <div>
+              <p className="eyebrow">Elementi</p>
+              <h2>{selectedCollection ? selectedCollection.name : "Nessuna collezione selezionata"}</h2>
             </div>
+            <button
+              className="secondary-action"
+              type="button"
+              disabled={!selectedCollection}
+              onClick={() => setItemModalOpen(true)}
+            >
+              <span aria-hidden="true">+</span>
+              Nuovo elemento
+            </button>
+          </div>
 
+          {loadState === "error" && <div className="empty-state">Avvia il backend per leggere le collezioni locali.</div>}
+
+          {loadState !== "error" && !selectedCollection && (
+            <div className="empty-state">Crea una collezione dalla sidebar per iniziare il tuo archivio.</div>
+          )}
+
+          {selectedCollection && selectedCollection.items.length === 0 && (
+            <div className="empty-state">Questa collezione e' ancora vuota. Aggiungi il primo elemento.</div>
+          )}
+
+          <div className="items-list">
+            {selectedCollection?.items.map((item) => (
+              <article className="item-row" key={item.id}>
+                <div className="item-row__avatar" aria-hidden="true">
+                  {item.title.slice(0, 1).toUpperCase()}
+                </div>
+                <div className="item-row__content">
+                  <div className="item-row__title">
+                    <h3>{item.title}</h3>
+                    <span>{item.condition}</span>
+                  </div>
+                  {(item.description || item.notes) && <p>{item.description || item.notes}</p>}
+                  {item.attributes.length > 0 && (
+                    <div className="attribute-list">
+                      {item.attributes.map((attribute) => (
+                        <span key={attribute.id}>
+                          {attribute.label}: {attribute.value}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+      </main>
+
+      {collectionModalOpen && (
+        <div className="modal-backdrop" role="presentation">
+          <form className="modal" onSubmit={handleCreateCollection}>
+            <div className="modal__header">
+              <h2>Nuova collezione</h2>
+              <button type="button" onClick={() => setCollectionModalOpen(false)} aria-label="Chiudi">
+                x
+              </button>
+            </div>
             <label>
               Nome
               <input
-                value={form.name}
-                onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
-                placeholder="Es. Garage dei sogni"
+                value={collectionForm.name}
+                onChange={(event) => setCollectionForm((current) => ({ ...current, name: event.target.value }))}
+                placeholder="Es. Libreria personale"
               />
             </label>
-
             <label>
               Tipo
               <select
-                value={form.type}
-                onChange={(event) => setForm((current) => ({ ...current, type: event.target.value }))}
+                value={collectionForm.type}
+                onChange={(event) => setCollectionForm((current) => ({ ...current, type: event.target.value }))}
               >
                 {collectionTypes.map((type) => (
                   <option key={type} value={type}>
@@ -127,54 +304,115 @@ export function App() {
                 ))}
               </select>
             </label>
+            <label>
+              Descrizione
+              <textarea
+                value={collectionForm.description}
+                onChange={(event) => setCollectionForm((current) => ({ ...current, description: event.target.value }))}
+                placeholder="Cosa vuoi tenere sotto controllo?"
+                rows={4}
+              />
+            </label>
+            <button className="primary-action" type="submit">
+              Crea collezione
+            </button>
+          </form>
+        </div>
+      )}
 
+      {itemModalOpen && selectedCollection && (
+        <div className="modal-backdrop" role="presentation">
+          <form className="modal modal--wide" onSubmit={handleCreateItem}>
+            <div className="modal__header">
+              <h2>Nuovo elemento</h2>
+              <button type="button" onClick={() => setItemModalOpen(false)} aria-label="Chiudi">
+                x
+              </button>
+            </div>
+            <label>
+              Titolo
+              <input
+                value={itemForm.title}
+                onChange={(event) => setItemForm((current) => ({ ...current, title: event.target.value }))}
+                placeholder="Es. Dune"
+              />
+            </label>
+            <div className="field-grid">
+              <label>
+                Stato
+                <input
+                  value={itemForm.condition}
+                  onChange={(event) => setItemForm((current) => ({ ...current, condition: event.target.value }))}
+                  placeholder="Ottimo"
+                />
+              </label>
+              <label>
+                Data acquisizione
+                <input
+                  type="date"
+                  value={itemForm.acquiredAt ?? ""}
+                  onChange={(event) => setItemForm((current) => ({ ...current, acquiredAt: event.target.value }))}
+                />
+              </label>
+            </div>
+            <label>
+              Descrizione
+              <textarea
+                value={itemForm.description}
+                onChange={(event) => setItemForm((current) => ({ ...current, description: event.target.value }))}
+                placeholder="Dettagli principali dell'elemento."
+                rows={3}
+              />
+            </label>
             <label>
               Note
               <textarea
-                value={form.description}
-                onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))}
-                placeholder="Criteri, stato, desiderata o provenienza."
-                rows={5}
+                value={itemForm.notes}
+                onChange={(event) => setItemForm((current) => ({ ...current, notes: event.target.value }))}
+                placeholder="Promemoria, provenienza, difetti, desiderata."
+                rows={3}
               />
             </label>
-
-            <button type="submit">
-              <span aria-hidden="true">+</span>
-              Crea
-            </button>
-          </form>
-
-          <section className="collections-area" aria-label="Collezioni">
-            <div className="section-heading">
-              <div>
-                <p className="eyebrow">Raccolte</p>
-                <h2>Le tue collezioni</h2>
+            <div className="attribute-editor">
+              <div className="attribute-editor__header">
+                <span>Attributi dinamici</span>
+                <button type="button" onClick={() => setAttributeDrafts((current) => [...current, { key: "", value: "" }])}>
+                  +
+                </button>
               </div>
-              <button className="ghost-button" type="button" onClick={() => void loadCollections()}>
-                Aggiorna
-              </button>
-            </div>
-
-            {loadState === "loading" && <div className="empty-state">Caricamento...</div>}
-
-            {loadState === "error" && (
-              <div className="empty-state">
-                Avvia il backend su <strong>{collectifyClient.apiBaseUrl}</strong>.
-              </div>
-            )}
-
-            {loadState !== "loading" && loadState !== "error" && collections.length === 0 && (
-              <div className="empty-state">Nessuna collezione presente.</div>
-            )}
-
-            <div className="collections-grid">
-              {collections.map((collection) => (
-                <CollectionCard key={collection.id} collection={collection} />
+              {attributeDrafts.map((attribute, index) => (
+                <div className="attribute-editor__row" key={index}>
+                  <input
+                    value={attribute.key}
+                    onChange={(event) =>
+                      setAttributeDrafts((current) =>
+                        current.map((item, itemIndex) =>
+                          itemIndex === index ? { ...item, key: event.target.value } : item
+                        )
+                      )
+                    }
+                    placeholder="Campo"
+                  />
+                  <input
+                    value={attribute.value}
+                    onChange={(event) =>
+                      setAttributeDrafts((current) =>
+                        current.map((item, itemIndex) =>
+                          itemIndex === index ? { ...item, value: event.target.value } : item
+                        )
+                      )
+                    }
+                    placeholder="Valore"
+                  />
+                </div>
               ))}
             </div>
-          </section>
-        </section>
-      </main>
+            <button className="primary-action" type="submit">
+              Aggiungi elemento
+            </button>
+          </form>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,8 +1,8 @@
 namespace Collectify.Api.Modules.Collections;
 
-public sealed record CreateCollectionRequest(string Name, string Type, string? Description);
+public sealed record CreateCollectionRequest(string Name, string Type, string? Description, Guid? CategoryId);
 
-public sealed record UpdateCollectionRequest(string Name, string Type, string? Description);
+public sealed record UpdateCollectionRequest(string Name, string Type, string? Description, Guid? CategoryId);
 
 public sealed record AddCollectionItemRequest(
     string Title,
@@ -36,6 +36,10 @@ public sealed record CollectionDetailResponse(
     IReadOnlyList<CollectionItemResponse> Items,
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt);
+
+public sealed record CollectionItemsResponse(
+    Guid CollectionId,
+    IReadOnlyList<CollectionItemResponse> Items);
 
 public sealed record CollectionItemResponse(
     Guid Id,
