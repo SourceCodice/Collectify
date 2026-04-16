@@ -48,10 +48,13 @@ public sealed record CollectionItemResponse(
     string? Notes,
     string Condition,
     DateTimeOffset? AcquiredAt,
+    decimal? EstimatedValue,
+    string? Currency,
     IReadOnlyList<ItemAttributeResponse> Attributes,
     IReadOnlyList<Guid> TagIds,
     IReadOnlyList<ItemImageResponse> Images,
     IReadOnlyList<ExternalReferenceResponse> ExternalReferences,
+    DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt);
 
 public sealed record ItemAttributeResponse(Guid Id, string Key, string Label, string Value, string ValueType, string? Unit);

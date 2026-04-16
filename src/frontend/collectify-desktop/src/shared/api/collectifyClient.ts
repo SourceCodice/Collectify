@@ -13,6 +13,7 @@ import type {
   ImportExternalItemPayload,
   ImportedExternalItem
 } from "../../features/externalMetadata/types";
+import type { LocalSearchQuery, LocalSearchResponse } from "../../features/search/types";
 
 const apiBaseUrl = import.meta.env.VITE_COLLECTIFY_API_URL ?? "http://localhost:5088";
 
@@ -72,6 +73,18 @@ function externalMetadataPath(kind: ExternalMetadataKind) {
   return kind === "movie" ? "movies" : kind === "game" ? "games" : "albums";
 }
 
+function buildQueryString(params: Record<string, string | undefined>) {
+  const searchParams = new URLSearchParams();
+
+  Object.entries(params).forEach(([key, value]) => {
+    if (value) {
+      searchParams.set(key, value);
+    }
+  });
+
+  return searchParams.toString();
+}
+
 export const collectifyClient = {
   apiBaseUrl,
   resolveAssetUrl: (url: string) => (url.startsWith("http") ? url : `${apiBaseUrl}${url}`),
@@ -121,5 +134,9 @@ export const collectifyClient = {
     request<ImportedExternalItem>("/api/external/import", {
       method: "POST",
       body: JSON.stringify(payload)
-    })
+    }),
+  searchItems: (query: LocalSearchQuery) => {
+    const queryString = buildQueryString(query);
+    return request<LocalSearchResponse>(`/api/search/items${queryString ? `?${queryString}` : ""}`);
+  }
 };

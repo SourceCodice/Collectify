@@ -97,6 +97,12 @@ I nomi file includono timestamp e `Guid`, cosi' non entrano in collisione con al
 
 I dati importati da TMDb, RAWG e Discogs vengono convertiti in `ItemAttribute` ed `ExternalReference` prima del salvataggio locale. Le chiavi API restano nel backend e il frontend non chiama mai direttamente i provider esterni.
 
+## Ricerca Locale
+
+La ricerca locale indicizza in memoria il documento JSON caricato dall'app. Il testo viene confrontato con nome collezione, titolo item, descrizione, note, tag e attributi dinamici.
+
+I filtri lavorano sui dati gia' presenti nel JSON: categoria della collezione, tag dell'item, stato, data e valutazione numerica quando disponibile tra gli attributi dinamici.
+
 ## File Mancante
 
 Se il file JSON non esiste, viene creato un documento iniziale con dati seed minimi.

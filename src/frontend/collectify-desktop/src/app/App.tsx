@@ -2,14 +2,17 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { collectionTypeLabels, collectionTypes } from "../features/collections/CollectionTypeCatalog";
 import type {
   CollectionDetail,
+  CollectionItem,
   CollectionSummary,
   CreateCollectionPayload,
   CreateItemPayload
 } from "../features/collections/types";
+import type { LocalSearchResponse, LocalSearchResult } from "../features/search/types";
 import { collectifyClient } from "../shared/api/collectifyClient";
 import "./App.css";
 
 type LoadState = "idle" | "loading" | "ready" | "error";
+type SearchState = "idle" | "loading" | "ready" | "error";
 
 type AttributeDraft = {
   key: string;
@@ -19,6 +22,28 @@ type AttributeDraft = {
 type ImagePreview = {
   name: string;
   url: string;
+};
+
+type SearchFilters = {
+  query: string;
+  categoryId: string;
+  tagId: string;
+  condition: string;
+  minRating: string;
+  dateFrom: string;
+  dateTo: string;
+  dateField: "createdAt" | "updatedAt" | "acquiredAt";
+  sortBy: "name" | "createdAt" | "updatedAt" | "value";
+  sortDirection: "asc" | "desc";
+};
+
+type VisibleItem = {
+  collectionId: string;
+  collectionName?: string;
+  categoryName?: string | null;
+  item: CollectionItem;
+  tags: LocalSearchResult["tags"];
+  rating?: number | null;
 };
 
 const emptyCollectionForm: CreateCollectionPayload = {
@@ -38,6 +63,31 @@ const emptyItemForm: CreateItemPayload = {
   externalReferences: []
 };
 
+const emptySearchFilters: SearchFilters = {
+  query: "",
+  categoryId: "",
+  tagId: "",
+  condition: "",
+  minRating: "",
+  dateFrom: "",
+  dateTo: "",
+  dateField: "updatedAt",
+  sortBy: "updatedAt",
+  sortDirection: "desc"
+};
+
+const emptySearchResponse: LocalSearchResponse = {
+  totalCount: 0,
+  items: [],
+  facets: {
+    categories: [],
+    tags: [],
+    conditions: [],
+    ratingRange: null,
+    valueRange: null
+  }
+};
+
 export function App() {
   const [collections, setCollections] = useState<CollectionSummary[]>([]);
   const [selectedCollection, setSelectedCollection] = useState<CollectionDetail | null>(null);
@@ -50,6 +100,10 @@ export function App() {
   const [attributeDrafts, setAttributeDrafts] = useState<AttributeDraft[]>([{ key: "", value: "" }]);
   const [itemImageFiles, setItemImageFiles] = useState<File[]>([]);
   const [itemImagePreviews, setItemImagePreviews] = useState<ImagePreview[]>([]);
+  const [searchFilters, setSearchFilters] = useState<SearchFilters>(emptySearchFilters);
+  const [searchResponse, setSearchResponse] = useState<LocalSearchResponse>(emptySearchResponse);
+  const [searchState, setSearchState] = useState<SearchState>("idle");
+  const [searchVersion, setSearchVersion] = useState(0);
 
   async function loadCollections(preferredCollectionId?: string) {
     setLoadState("loading");
@@ -94,6 +148,34 @@ export function App() {
   }, []);
 
   useEffect(() => {
+    const timeoutId = window.setTimeout(async () => {
+      setSearchState("loading");
+
+      try {
+        const data = await collectifyClient.searchItems({
+          query: searchFilters.query.trim() || undefined,
+          categoryId: searchFilters.categoryId || undefined,
+          tagId: searchFilters.tagId || undefined,
+          condition: searchFilters.condition || undefined,
+          minRating: searchFilters.minRating || undefined,
+          dateFrom: searchFilters.dateFrom || undefined,
+          dateTo: searchFilters.dateTo || undefined,
+          dateField: searchFilters.dateField,
+          sortBy: searchFilters.sortBy,
+          sortDirection: searchFilters.sortDirection
+        });
+
+        setSearchResponse(data);
+        setSearchState("ready");
+      } catch {
+        setSearchState("error");
+      }
+    }, 220);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [searchFilters, searchVersion]);
+
+  useEffect(() => {
     const previews = itemImageFiles.map((file) => ({
       name: file.name,
       url: URL.createObjectURL(file)
@@ -110,6 +192,48 @@ export function App() {
     () => collections.reduce((total, collection) => total + collection.itemCount, 0),
     [collections]
   );
+
+  const searchIsActive = useMemo(() => {
+    return (
+      Boolean(searchFilters.query.trim()) ||
+      Boolean(searchFilters.categoryId) ||
+      Boolean(searchFilters.tagId) ||
+      Boolean(searchFilters.condition) ||
+      Boolean(searchFilters.minRating) ||
+      Boolean(searchFilters.dateFrom) ||
+      Boolean(searchFilters.dateTo) ||
+      searchFilters.sortBy !== emptySearchFilters.sortBy ||
+      searchFilters.sortDirection !== emptySearchFilters.sortDirection
+    );
+  }, [searchFilters]);
+
+  const visibleItems = useMemo<VisibleItem[]>(() => {
+    if (searchIsActive) {
+      return searchResponse.items.map((result) => ({
+        collectionId: result.collectionId,
+        collectionName: result.collectionName,
+        categoryName: result.categoryName,
+        item: result.item,
+        tags: result.tags,
+        rating: result.rating
+      }));
+    }
+
+    return selectedCollection?.items.map((item) => ({
+      collectionId: selectedCollection.id,
+      item,
+      tags: [],
+      rating: null
+    })) ?? [];
+  }, [searchIsActive, searchResponse.items, selectedCollection]);
+
+  function updateSearchFilter<Key extends keyof SearchFilters>(key: Key, value: SearchFilters[Key]) {
+    setSearchFilters((current) => ({ ...current, [key]: value }));
+  }
+
+  function refreshSearchResults() {
+    setSearchVersion((current) => current + 1);
+  }
 
   async function handleCreateCollection(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -169,51 +293,51 @@ export function App() {
       setItemImageFiles([]);
       setItemModalOpen(false);
       await loadCollections(selectedCollection.id);
+      refreshSearchResults();
       setMessage("Elemento aggiunto.");
     } catch {
       setMessage("Creazione elemento non riuscita.");
     }
   }
 
-  async function handleUploadImages(itemId: string, files: FileList | null) {
-    if (!selectedCollection || !files?.length) {
+  async function handleUploadImages(collectionId: string, itemId: string, files: FileList | null) {
+    if (!files?.length) {
       return;
     }
 
     try {
       for (const file of Array.from(files)) {
-        await collectifyClient.uploadItemImage(selectedCollection.id, itemId, file);
+        await collectifyClient.uploadItemImage(collectionId, itemId, file);
       }
 
-      await loadCollections(selectedCollection.id);
+      await loadCollections(collectionId);
+      refreshSearchResults();
       setMessage("Immagine aggiunta.");
     } catch {
       setMessage("Upload immagine non riuscito.");
     }
   }
 
-  async function handleReplaceImage(itemId: string, imageId: string, files: FileList | null) {
-    if (!selectedCollection || !files?.[0]) {
+  async function handleReplaceImage(collectionId: string, itemId: string, imageId: string, files: FileList | null) {
+    if (!files?.[0]) {
       return;
     }
 
     try {
-      await collectifyClient.replaceItemImage(selectedCollection.id, itemId, imageId, files[0]);
-      await loadCollections(selectedCollection.id);
+      await collectifyClient.replaceItemImage(collectionId, itemId, imageId, files[0]);
+      await loadCollections(collectionId);
+      refreshSearchResults();
       setMessage("Immagine sostituita.");
     } catch {
       setMessage("Sostituzione immagine non riuscita.");
     }
   }
 
-  async function handleDeleteImage(itemId: string, imageId: string) {
-    if (!selectedCollection) {
-      return;
-    }
-
+  async function handleDeleteImage(collectionId: string, itemId: string, imageId: string) {
     try {
-      await collectifyClient.deleteItemImage(selectedCollection.id, itemId, imageId);
-      await loadCollections(selectedCollection.id);
+      await collectifyClient.deleteItemImage(collectionId, itemId, imageId);
+      await loadCollections(collectionId);
+      refreshSearchResults();
       setMessage("Immagine eliminata.");
     } catch {
       setMessage("Eliminazione immagine non riuscita.");
@@ -289,11 +413,76 @@ export function App() {
           </div>
         </section>
 
+        <section className="search-panel" aria-label="Ricerca locale">
+          <div className="search-panel__bar">
+            <input
+              value={searchFilters.query}
+              onChange={(event) => updateSearchFilter("query", event.target.value)}
+              placeholder="Cerca per nome, descrizione, tag o attributi"
+            />
+            <button className="ghost-action" type="button" onClick={() => setSearchFilters(emptySearchFilters)}>
+              Azzera
+            </button>
+          </div>
+          <div className="search-panel__filters">
+            <select value={searchFilters.categoryId} onChange={(event) => updateSearchFilter("categoryId", event.target.value)}>
+              <option value="">Tutte le categorie</option>
+              {searchResponse.facets.categories.map((category) => (
+                <option key={category.id} value={category.id}>
+                  {category.label} ({category.count})
+                </option>
+              ))}
+            </select>
+            <select value={searchFilters.tagId} onChange={(event) => updateSearchFilter("tagId", event.target.value)}>
+              <option value="">Tutti i tag</option>
+              {searchResponse.facets.tags.map((tag) => (
+                <option key={tag.id} value={tag.id}>
+                  {tag.label} ({tag.count})
+                </option>
+              ))}
+            </select>
+            <select value={searchFilters.condition} onChange={(event) => updateSearchFilter("condition", event.target.value)}>
+              <option value="">Tutti gli stati</option>
+              {searchResponse.facets.conditions.map((condition) => (
+                <option key={condition.id} value={condition.label}>
+                  {condition.label} ({condition.count})
+                </option>
+              ))}
+            </select>
+            <input
+              min={searchResponse.facets.ratingRange?.min ?? 0}
+              max={searchResponse.facets.ratingRange?.max ?? 10}
+              step="0.1"
+              type="number"
+              value={searchFilters.minRating}
+              onChange={(event) => updateSearchFilter("minRating", event.target.value)}
+              placeholder="Valutazione min."
+            />
+            <select value={searchFilters.dateField} onChange={(event) => updateSearchFilter("dateField", event.target.value as SearchFilters["dateField"])}>
+              <option value="updatedAt">Data aggiornamento</option>
+              <option value="createdAt">Data creazione</option>
+              <option value="acquiredAt">Data acquisizione</option>
+            </select>
+            <input type="date" value={searchFilters.dateFrom} onChange={(event) => updateSearchFilter("dateFrom", event.target.value)} />
+            <input type="date" value={searchFilters.dateTo} onChange={(event) => updateSearchFilter("dateTo", event.target.value)} />
+            <select value={searchFilters.sortBy} onChange={(event) => updateSearchFilter("sortBy", event.target.value as SearchFilters["sortBy"])}>
+              <option value="updatedAt">Ordina per aggiornamento</option>
+              <option value="createdAt">Ordina per creazione</option>
+              <option value="name">Ordina per nome</option>
+              <option value="value">Ordina per valore</option>
+            </select>
+            <select value={searchFilters.sortDirection} onChange={(event) => updateSearchFilter("sortDirection", event.target.value as SearchFilters["sortDirection"])}>
+              <option value="desc">Decrescente</option>
+              <option value="asc">Crescente</option>
+            </select>
+          </div>
+        </section>
+
         <section className="items-section">
           <div className="section-heading">
             <div>
-              <p className="eyebrow">Elementi</p>
-              <h2>{selectedCollection ? selectedCollection.name : "Nessuna collezione selezionata"}</h2>
+              <p className="eyebrow">{searchIsActive ? "Ricerca locale" : "Elementi"}</p>
+              <h2>{searchIsActive ? `${searchResponse.totalCount} risultati` : selectedCollection ? selectedCollection.name : "Nessuna collezione selezionata"}</h2>
             </div>
             <button
               className="secondary-action"
@@ -307,17 +496,23 @@ export function App() {
           </div>
 
           {loadState === "error" && <div className="empty-state">Avvia il backend per leggere le collezioni locali.</div>}
+          {searchState === "error" && <div className="empty-state">La ricerca locale non e' disponibile finche' il backend non risponde.</div>}
+          {searchState === "loading" && searchIsActive && <div className="empty-state">Aggiornamento risultati...</div>}
 
-          {loadState !== "error" && !selectedCollection && (
+          {loadState !== "error" && !searchIsActive && !selectedCollection && (
             <div className="empty-state">Crea una collezione dalla sidebar per iniziare il tuo archivio.</div>
           )}
 
-          {selectedCollection && selectedCollection.items.length === 0 && (
+          {!searchIsActive && selectedCollection && selectedCollection.items.length === 0 && (
             <div className="empty-state">Questa collezione e' ancora vuota. Aggiungi il primo elemento.</div>
           )}
 
+          {searchIsActive && searchState !== "loading" && visibleItems.length === 0 && (
+            <div className="empty-state">Nessun elemento corrisponde ai filtri attuali.</div>
+          )}
+
           <div className="items-list">
-            {selectedCollection?.items.map((item) => (
+            {visibleItems.map(({ collectionId, collectionName, categoryName, item, tags, rating }) => (
               <article className="item-row" key={item.id}>
                 <div className="item-row__avatar" aria-hidden="true">
                   {item.images[0] ? (
@@ -331,7 +526,21 @@ export function App() {
                     <h3>{item.title}</h3>
                     <span>{item.condition}</span>
                   </div>
+                  {searchIsActive && (
+                    <div className="result-meta">
+                      <span>{collectionName}</span>
+                      {categoryName && <span>{categoryName}</span>}
+                      {typeof rating === "number" && <span>Valutazione {rating}</span>}
+                    </div>
+                  )}
                   {(item.description || item.notes) && <p>{item.description || item.notes}</p>}
+                  {tags.length > 0 && (
+                    <div className="tag-list">
+                      {tags.map((tag) => (
+                        <span key={tag.id}>{tag.label}</span>
+                      ))}
+                    </div>
+                  )}
                   {item.attributes.length > 0 && (
                     <div className="attribute-list">
                       {item.attributes.map((attribute) => (
@@ -352,10 +561,10 @@ export function App() {
                               <input
                                 accept="image/gif,image/jpeg,image/png,image/webp"
                                 type="file"
-                                onChange={(event) => void handleReplaceImage(item.id, image.id, event.currentTarget.files)}
+                                onChange={(event) => void handleReplaceImage(collectionId, item.id, image.id, event.currentTarget.files)}
                               />
                             </label>
-                            <button type="button" onClick={() => void handleDeleteImage(item.id, image.id)}>
+                            <button type="button" onClick={() => void handleDeleteImage(collectionId, item.id, image.id)}>
                               Elimina
                             </button>
                           </div>
@@ -369,7 +578,7 @@ export function App() {
                       accept="image/gif,image/jpeg,image/png,image/webp"
                       multiple
                       type="file"
-                      onChange={(event) => void handleUploadImages(item.id, event.currentTarget.files)}
+                      onChange={(event) => void handleUploadImages(collectionId, item.id, event.currentTarget.files)}
                     />
                   </label>
                 </div>

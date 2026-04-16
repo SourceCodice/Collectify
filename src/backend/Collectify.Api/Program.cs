@@ -1,6 +1,7 @@
 using Collectify.Api.DevTools;
 using Collectify.Api.Modules.Collections;
 using Collectify.Api.Modules.ExternalMetadata;
+using Collectify.Api.Modules.Search;
 using Collectify.Api.Persistence;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -33,6 +34,7 @@ builder.Services.AddSingleton<IExternalMetadataProvider, TmdbMetadataProvider>()
 builder.Services.AddSingleton<IExternalMetadataProvider, RawgMetadataProvider>();
 builder.Services.AddSingleton<IExternalMetadataProvider, DiscogsMetadataProvider>();
 builder.Services.AddSingleton<ExternalMetadataApplicationService>();
+builder.Services.AddSingleton<LocalSearchApplicationService>();
 builder.Services.AddSingleton<IUserProfileRepository, JsonUserProfileRepository>();
 builder.Services.AddSingleton<ICollectionCategoryRepository, JsonCollectionCategoryRepository>();
 builder.Services.AddSingleton<ITagRepository, JsonTagRepository>();
@@ -63,6 +65,7 @@ app.MapGet("/health", () => Results.Ok(new
 app.MapCollectionEndpoints();
 app.MapAssetEndpoints();
 app.MapExternalMetadataEndpoints();
+app.MapSearchEndpoints();
 
 app.Run();
 

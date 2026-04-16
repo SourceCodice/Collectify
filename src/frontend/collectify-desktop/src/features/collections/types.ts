@@ -26,10 +26,13 @@ export type CollectionItem = {
   notes?: string | null;
   condition: string;
   acquiredAt?: string | null;
+  estimatedValue?: number | null;
+  currency?: string | null;
   attributes: ItemAttribute[];
   tagIds: string[];
   images: ItemImage[];
   externalReferences: ExternalReference[];
+  createdAt: string;
   updatedAt: string;
 };
 

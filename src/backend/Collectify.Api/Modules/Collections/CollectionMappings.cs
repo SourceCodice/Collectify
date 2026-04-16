@@ -36,6 +36,8 @@ public static class CollectionMappings
             item.Notes,
             item.Condition,
             item.AcquiredAt,
+            item.EstimatedValue,
+            item.Currency,
             item.Attributes.Select(attribute => new ItemAttributeResponse(
                 attribute.Id,
                 attribute.Key,
@@ -51,6 +53,7 @@ public static class CollectionMappings
                 reference.ExternalId,
                 reference.Url,
                 reference.Metadata)).ToList(),
+            item.CreatedAt,
             item.UpdatedAt);
     }
 
