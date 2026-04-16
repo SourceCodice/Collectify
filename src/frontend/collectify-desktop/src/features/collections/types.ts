@@ -3,6 +3,7 @@ export type CollectionSummary = {
   name: string;
   type: string;
   description?: string | null;
+  categoryId?: string | null;
   itemCount: number;
   updatedAt: string;
 };

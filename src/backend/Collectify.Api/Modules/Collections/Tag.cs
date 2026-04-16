@@ -1,13 +1,10 @@
 namespace Collectify.Api.Modules.Collections;
 
-public sealed class Collection
+public sealed class Tag
 {
     public Guid Id { get; set; }
-    public Guid? CategoryId { get; set; }
     public string Name { get; set; } = string.Empty;
-    public string Type { get; set; } = "Custom";
-    public string? Description { get; set; }
-    public List<Item> Items { get; set; } = [];
+    public string? Color { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
 }

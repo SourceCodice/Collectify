@@ -1,5 +1,6 @@
 using Collectify.Api.DevTools;
 using Collectify.Api.Modules.Collections;
+using Collectify.Api.Persistence;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -14,7 +15,13 @@ builder.Services.AddCors(options =>
     });
 });
 
-builder.Services.AddSingleton<ICollectionRepository, InMemoryCollectionRepository>();
+builder.Services.Configure<LocalDataOptions>(builder.Configuration.GetSection("LocalData"));
+builder.Services.AddSingleton<ICollectifyDataStore, JsonCollectifyDataStore>();
+builder.Services.AddSingleton<ICollectionRepository, JsonCollectionRepository>();
+builder.Services.AddSingleton<IUserProfileRepository, JsonUserProfileRepository>();
+builder.Services.AddSingleton<ICollectionCategoryRepository, JsonCollectionCategoryRepository>();
+builder.Services.AddSingleton<ITagRepository, JsonTagRepository>();
+builder.Services.AddSingleton<IAppSettingsRepository, JsonAppSettingsRepository>();
 
 if (builder.Environment.IsDevelopment())
 {
@@ -34,7 +41,7 @@ app.MapGet("/health", () => Results.Ok(new
 {
     status = "ok",
     service = "Collectify.Api",
-    storage = "InMemory",
+    storage = "JsonFile",
     timestamp = DateTimeOffset.UtcNow
 }));
 

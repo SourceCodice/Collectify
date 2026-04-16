@@ -27,7 +27,23 @@ Modules/Collections/
   InMemoryCollectionRepository.cs
 ```
 
-La dipendenza principale per l'accesso ai dati e' `ICollectionRepository`. Questo permette di sostituire il repository in memoria con un repository JSON, SQLite o altro storage senza cambiare gli endpoint.
+La dipendenza principale per l'accesso ai dati e' `ICollectionRepository`. L'implementazione attuale usa repository JSON file-based, senza database.
+
+La persistenza vive nel namespace `Collectify.Api.Persistence`:
+
+```text
+Persistence/
+  CollectifyDataDocument.cs
+  CollectifySeedData.cs
+  ICollectifyDataStore.cs
+  JsonCollectifyDataStore.cs
+  JsonCollectionRepository.cs
+  JsonUserProfileRepository.cs
+  JsonCollectionCategoryRepository.cs
+  JsonTagRepository.cs
+  JsonAppSettingsRepository.cs
+  LocalDataOptions.cs
+```
 
 ## Frontend
 
@@ -62,7 +78,7 @@ La modalita' e' configurabile in `appsettings.Development.json`:
 
 ## Evoluzione consigliata
 
-1. Aggiungere persistenza JSON locale.
-2. Introdurre dettaglio collezione e gestione oggetti.
-3. Aggiungere test backend per endpoint e repository.
-4. Preparare packaging desktop con Electron Builder.
+1. Introdurre dettaglio collezione e gestione oggetti.
+2. Aggiungere test backend per endpoint e repository.
+3. Preparare packaging desktop con Electron Builder.
+4. Aggiungere migrazioni JSON se lo schema locale evolve.

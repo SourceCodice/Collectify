@@ -51,4 +51,12 @@ npm.cmd run typecheck
 
 ## Dati di sviluppo
 
-Attualmente i dati sono in memoria e vengono rigenerati a ogni avvio del backend. Il prossimo passo consigliato e' introdurre un repository JSON locale dietro la stessa interfaccia `ICollectionRepository`.
+I dati di sviluppo vengono salvati in:
+
+```text
+data/dev/collectify-data.json
+```
+
+Il file viene creato automaticamente al primo avvio. Se il JSON risulta corrotto, viene preservato con suffisso `.corrupt-*` e sostituito da un nuovo documento valido.
+
+Per il modello dati completo vedi [DATA_MODEL.md](DATA_MODEL.md).
