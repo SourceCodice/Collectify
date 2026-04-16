@@ -55,7 +55,9 @@ I dati di sviluppo vengono salvati in:
 
 ```text
 data/dev/collectify-data.json
+data/dev/settings.json
 data/dev/assets/images/
+data/dev/backups/
 ```
 
 Il file viene creato automaticamente al primo avvio. Se il JSON risulta corrotto, viene preservato con suffisso `.corrupt-*` e sostituito da un nuovo documento valido.
@@ -79,3 +81,14 @@ GET /api/search/items?query=blade&sortBy=name&sortDirection=asc
 ```
 
 Sono disponibili filtri per categoria, tag, stato, valutazione numerica ricavata dagli attributi e intervallo data.
+
+## Impostazioni locali
+
+Le impostazioni vengono salvate in `data/dev/settings.json` durante lo sviluppo. L'endpoint locale e':
+
+```text
+GET /api/settings
+PUT /api/settings
+```
+
+Da qui si possono aggiornare cartella dati, tema, backup automatico e lingua futura.

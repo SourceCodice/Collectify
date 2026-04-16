@@ -22,6 +22,7 @@ public sealed class JsonCollectifyDataStore(
             var paths = pathResolver.Resolve();
             Directory.CreateDirectory(paths.RootPath);
             Directory.CreateDirectory(paths.ImagesPath);
+            Directory.CreateDirectory(paths.BackupsPath);
 
             if (!File.Exists(paths.DataFilePath))
             {
@@ -76,9 +77,15 @@ public sealed class JsonCollectifyDataStore(
             var paths = pathResolver.Resolve();
             Directory.CreateDirectory(paths.RootPath);
             Directory.CreateDirectory(paths.ImagesPath);
+            Directory.CreateDirectory(paths.BackupsPath);
 
             document.UpdatedAt = DateTimeOffset.UtcNow;
             Normalize(document);
+
+            if (paths.AutomaticBackupEnabled)
+            {
+                CreateAutomaticBackup(paths.DataFilePath, paths.BackupsPath);
+            }
 
             await WriteAtomicAsync(paths.DataFilePath, document, cancellationToken);
         }
@@ -86,6 +93,18 @@ public sealed class JsonCollectifyDataStore(
         {
             _lock.Release();
         }
+    }
+
+    private static void CreateAutomaticBackup(string dataFilePath, string backupsPath)
+    {
+        if (!File.Exists(dataFilePath))
+        {
+            return;
+        }
+
+        Directory.CreateDirectory(backupsPath);
+        var backupFileName = $"{Path.GetFileNameWithoutExtension(dataFilePath)}-{DateTimeOffset.UtcNow:yyyyMMddHHmmssfff}-{Guid.NewGuid():N}.json";
+        File.Copy(dataFilePath, Path.Combine(backupsPath, backupFileName), overwrite: false);
     }
 
     private async Task WriteAtomicAsync(string targetPath, CollectifyDataDocument document, CancellationToken cancellationToken)

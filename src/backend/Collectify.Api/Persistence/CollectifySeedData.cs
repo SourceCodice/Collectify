@@ -25,7 +25,10 @@ public static class CollectifySeedData
             AppSettings = new AppSettings
             {
                 Id = Guid.Parse("08e195f8-46f5-43c1-8e5c-47ccff4e93d8"),
+                DataRootPath = string.Empty,
                 Theme = "System",
+                AutomaticBackupEnabled = true,
+                Language = "it-IT",
                 Locale = "it-IT",
                 Currency = "EUR",
                 DateFormat = "dd/MM/yyyy",

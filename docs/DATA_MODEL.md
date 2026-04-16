@@ -40,6 +40,12 @@ I dati locali sono salvati in un unico documento JSON:
 collectify-data.json
 ```
 
+Le impostazioni dell'app vengono salvate separatamente in:
+
+```text
+settings.json
+```
+
 La struttura del documento contiene:
 
 ```text
@@ -102,6 +108,10 @@ I dati importati da TMDb, RAWG e Discogs vengono convertiti in `ItemAttribute` e
 La ricerca locale indicizza in memoria il documento JSON caricato dall'app. Il testo viene confrontato con nome collezione, titolo item, descrizione, note, tag e attributi dinamici.
 
 I filtri lavorano sui dati gia' presenti nel JSON: categoria della collezione, tag dell'item, stato, data e valutazione numerica quando disponibile tra gli attributi dinamici.
+
+## Impostazioni Locali
+
+`settings.json` contiene percorso cartella dati, tema, stato del backup automatico e lingua. All'avvio l'app crea automaticamente cartella dati, cartella immagini e cartella backup quando necessarie.
 
 ## File Mancante
 

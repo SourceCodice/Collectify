@@ -14,6 +14,7 @@ import type {
   ImportedExternalItem
 } from "../../features/externalMetadata/types";
 import type { LocalSearchQuery, LocalSearchResponse } from "../../features/search/types";
+import type { AppSettings, UpdateAppSettingsPayload } from "../../features/settings/types";
 
 const apiBaseUrl = import.meta.env.VITE_COLLECTIFY_API_URL ?? "http://localhost:5088";
 
@@ -138,5 +139,11 @@ export const collectifyClient = {
   searchItems: (query: LocalSearchQuery) => {
     const queryString = buildQueryString(query);
     return request<LocalSearchResponse>(`/api/search/items${queryString ? `?${queryString}` : ""}`);
-  }
+  },
+  getSettings: () => request<AppSettings>("/api/settings"),
+  updateSettings: (payload: UpdateAppSettingsPayload) =>
+    request<AppSettings>("/api/settings", {
+      method: "PUT",
+      body: JSON.stringify(payload)
+    })
 };

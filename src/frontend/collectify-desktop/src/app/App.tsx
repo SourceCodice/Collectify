@@ -8,11 +8,13 @@ import type {
   CreateItemPayload
 } from "../features/collections/types";
 import type { LocalSearchResponse, LocalSearchResult } from "../features/search/types";
+import type { AppSettings, UpdateAppSettingsPayload } from "../features/settings/types";
 import { collectifyClient } from "../shared/api/collectifyClient";
 import "./App.css";
 
 type LoadState = "idle" | "loading" | "ready" | "error";
 type SearchState = "idle" | "loading" | "ready" | "error";
+type SettingsState = "idle" | "loading" | "ready" | "error";
 
 type AttributeDraft = {
   key: string;
@@ -88,6 +90,13 @@ const emptySearchResponse: LocalSearchResponse = {
   }
 };
 
+const emptySettingsForm: UpdateAppSettingsPayload = {
+  dataRootPath: "",
+  theme: "System",
+  automaticBackupEnabled: true,
+  language: "it-IT"
+};
+
 export function App() {
   const [collections, setCollections] = useState<CollectionSummary[]>([]);
   const [selectedCollection, setSelectedCollection] = useState<CollectionDetail | null>(null);
@@ -104,6 +113,10 @@ export function App() {
   const [searchResponse, setSearchResponse] = useState<LocalSearchResponse>(emptySearchResponse);
   const [searchState, setSearchState] = useState<SearchState>("idle");
   const [searchVersion, setSearchVersion] = useState(0);
+  const [settingsModalOpen, setSettingsModalOpen] = useState(false);
+  const [settingsState, setSettingsState] = useState<SettingsState>("idle");
+  const [settings, setSettings] = useState<AppSettings | null>(null);
+  const [settingsForm, setSettingsForm] = useState<UpdateAppSettingsPayload>(emptySettingsForm);
 
   async function loadCollections(preferredCollectionId?: string) {
     setLoadState("loading");
@@ -145,6 +158,7 @@ export function App() {
 
   useEffect(() => {
     void loadCollections();
+    void loadSettings();
   }, []);
 
   useEffect(() => {
@@ -233,6 +247,51 @@ export function App() {
 
   function refreshSearchResults() {
     setSearchVersion((current) => current + 1);
+  }
+
+  async function loadSettings() {
+    setSettingsState("loading");
+
+    try {
+      const data = await collectifyClient.getSettings();
+      setSettings(data);
+      setSettingsForm({
+        dataRootPath: data.dataRootPath,
+        theme: data.theme,
+        automaticBackupEnabled: data.automaticBackupEnabled,
+        language: data.language
+      });
+      setSettingsState("ready");
+    } catch {
+      setSettingsState("error");
+    }
+  }
+
+  async function handleSaveSettings(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    try {
+      const updated = await collectifyClient.updateSettings({
+        dataRootPath: settingsForm.dataRootPath,
+        theme: settingsForm.theme,
+        automaticBackupEnabled: settingsForm.automaticBackupEnabled,
+        language: settingsForm.language
+      });
+
+      setSettings(updated);
+      setSettingsForm({
+        dataRootPath: updated.dataRootPath,
+        theme: updated.theme,
+        automaticBackupEnabled: updated.automaticBackupEnabled,
+        language: updated.language
+      });
+      setSettingsModalOpen(false);
+      await loadCollections(selectedCollection?.id);
+      refreshSearchResults();
+      setMessage("Impostazioni salvate.");
+    } catch {
+      setMessage("Salvataggio impostazioni non riuscito.");
+    }
   }
 
   async function handleCreateCollection(event: FormEvent<HTMLFormElement>) {
@@ -359,6 +418,15 @@ export function App() {
           <span aria-hidden="true">+</span>
           Nuova collezione
         </button>
+
+        <button className="settings-action" type="button" onClick={() => setSettingsModalOpen(true)}>
+          Impostazioni
+        </button>
+
+        <div className="data-path-card">
+          <span>Cartella dati</span>
+          <strong>{settings?.dataRootPath ?? (settingsState === "loading" ? "Caricamento..." : "Non disponibile")}</strong>
+        </div>
 
         <nav className="collection-nav" aria-label="Collezioni">
           {collections.map((collection) => (
@@ -629,6 +697,83 @@ export function App() {
             </label>
             <button className="primary-action" type="submit">
               Crea collezione
+            </button>
+          </form>
+        </div>
+      )}
+
+      {settingsModalOpen && (
+        <div className="modal-backdrop" role="presentation">
+          <form className="modal modal--wide" onSubmit={handleSaveSettings}>
+            <div className="modal__header">
+              <h2>Impostazioni</h2>
+              <button type="button" onClick={() => setSettingsModalOpen(false)} aria-label="Chiudi">
+                x
+              </button>
+            </div>
+            <div className="settings-summary">
+              <div>
+                <span>File impostazioni</span>
+                <strong>{settings?.settingsFilePath ?? "Non disponibile"}</strong>
+              </div>
+              <div>
+                <span>File dati</span>
+                <strong>{settings?.dataFilePath ?? "Non disponibile"}</strong>
+              </div>
+            </div>
+            <label>
+              Cartella dati
+              <input
+                value={settingsForm.dataRootPath ?? ""}
+                onChange={(event) => setSettingsForm((current) => ({ ...current, dataRootPath: event.target.value }))}
+                placeholder="Percorso locale della cartella dati"
+              />
+            </label>
+            <div className="field-grid">
+              <label>
+                Tema
+                <select
+                  value={settingsForm.theme}
+                  onChange={(event) => setSettingsForm((current) => ({ ...current, theme: event.target.value }))}
+                >
+                  <option value="System">Sistema</option>
+                  <option value="Dark">Scuro</option>
+                  <option value="Light">Chiaro</option>
+                </select>
+              </label>
+              <label>
+                Lingua
+                <select
+                  value={settingsForm.language}
+                  onChange={(event) => setSettingsForm((current) => ({ ...current, language: event.target.value }))}
+                >
+                  <option value="it-IT">Italiano</option>
+                  <option value="en-US">English</option>
+                </select>
+              </label>
+            </div>
+            <label className="switch-field">
+              <input
+                checked={Boolean(settingsForm.automaticBackupEnabled)}
+                type="checkbox"
+                onChange={(event) =>
+                  setSettingsForm((current) => ({ ...current, automaticBackupEnabled: event.target.checked }))
+                }
+              />
+              <span>Backup automatico locale</span>
+            </label>
+            <div className="settings-summary">
+              <div>
+                <span>Immagini</span>
+                <strong>{settings?.imagesPath ?? "Non disponibile"}</strong>
+              </div>
+              <div>
+                <span>Backup</span>
+                <strong>{settings?.backupsPath ?? "Non disponibile"}</strong>
+              </div>
+            </div>
+            <button className="primary-action" type="submit">
+              Salva impostazioni
             </button>
           </form>
         </div>

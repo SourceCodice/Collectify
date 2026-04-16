@@ -2,6 +2,7 @@ using Collectify.Api.DevTools;
 using Collectify.Api.Modules.Collections;
 using Collectify.Api.Modules.ExternalMetadata;
 using Collectify.Api.Modules.Search;
+using Collectify.Api.Modules.Settings;
 using Collectify.Api.Persistence;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -26,6 +27,8 @@ builder.Services.AddHttpClient("ExternalMetadata", client =>
     client.Timeout = TimeSpan.FromSeconds(20);
 });
 builder.Services.AddSingleton<LocalDataPathResolver>();
+builder.Services.AddSingleton<AppSettingsFileStore>();
+builder.Services.AddSingleton<AppSettingsApplicationService>();
 builder.Services.AddSingleton<ICollectifyDataStore, JsonCollectifyDataStore>();
 builder.Services.AddSingleton<ICollectionRepository, JsonCollectionRepository>();
 builder.Services.AddSingleton<CollectionApplicationService>();
@@ -66,6 +69,7 @@ app.MapCollectionEndpoints();
 app.MapAssetEndpoints();
 app.MapExternalMetadataEndpoints();
 app.MapSearchEndpoints();
+app.MapSettingsEndpoints();
 
 app.Run();
 
