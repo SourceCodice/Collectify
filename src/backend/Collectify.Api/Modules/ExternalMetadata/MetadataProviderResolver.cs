@@ -110,6 +110,13 @@ public sealed class MetadataProviderResolver(
             "rawg" => !string.IsNullOrWhiteSpace(metadataOptions.RAWG.ApiKey),
             "discogs" => !string.IsNullOrWhiteSpace(metadataOptions.Discogs.ApiKey) &&
                 !string.IsNullOrWhiteSpace(metadataOptions.Discogs.ApiSecret),
+            "openlibrary" => true,
+            "musicbrainz" => true,
+            "itunes-movies" => true,
+            "itunes-albums" => true,
+            "itunes-books" => true,
+            "tvmaze" => true,
+            "steam" => true,
             _ => false
         };
     }

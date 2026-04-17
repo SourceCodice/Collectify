@@ -3,6 +3,7 @@ namespace Collectify.Api.Modules.ExternalMetadata;
 public static class ExternalMetadataKinds
 {
     public const string Movie = "movie";
+    public const string TvShow = "show";
     public const string Game = "game";
     public const string Album = "album";
     public const string Book = "book";

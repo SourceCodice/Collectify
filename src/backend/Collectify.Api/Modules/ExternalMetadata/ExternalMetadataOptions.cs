@@ -20,6 +20,36 @@ public sealed class ExternalMetadataOptions
         RequestsPerSecond = 2
     };
 
+    public ExternalMetadataProviderOptions OpenLibrary { get; set; } = new()
+    {
+        BaseUrl = "https://openlibrary.org",
+        RequestsPerSecond = 2
+    };
+
+    public ExternalMetadataProviderOptions MusicBrainz { get; set; } = new()
+    {
+        BaseUrl = "https://musicbrainz.org/ws/2",
+        RequestsPerSecond = 1
+    };
+
+    public ExternalMetadataProviderOptions ITunes { get; set; } = new()
+    {
+        BaseUrl = "https://itunes.apple.com",
+        RequestsPerSecond = 3
+    };
+
+    public ExternalMetadataProviderOptions TVmaze { get; set; } = new()
+    {
+        BaseUrl = "https://api.tvmaze.com",
+        RequestsPerSecond = 3
+    };
+
+    public ExternalMetadataProviderOptions Steam { get; set; } = new()
+    {
+        BaseUrl = "https://store.steampowered.com/api",
+        RequestsPerSecond = 2
+    };
+
     public ExternalMetadataRetryOptions Retry { get; set; } = new();
     public MetadataProviderResolverOptions ProviderResolver { get; set; } = new();
 }

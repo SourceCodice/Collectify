@@ -1,7 +1,7 @@
 import type { CollectionItem } from "../collections/types";
 
 export type ExternalMetadataProviderKind = "movie" | "game" | "album";
-export type ExternalMetadataKind = ExternalMetadataProviderKind | "book" | "manual";
+export type ExternalMetadataKind = ExternalMetadataProviderKind | "show" | "book" | "manual";
 
 export type MetadataProviderRole = "primary" | "optional" | "future";
 
