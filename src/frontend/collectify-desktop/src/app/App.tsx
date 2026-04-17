@@ -159,6 +159,42 @@ function mergeAttributeDrafts(current: AttributeDraft[], incoming: AttributeDraf
   return next.length > 0 ? next : [{ key: "", value: "" }];
 }
 
+function getItemPreviewUrl(item: CollectionItem) {
+  const primaryImage = item.images.find((image) => image.isPrimary) ?? item.images[0];
+  if (primaryImage) {
+    return collectifyClient.resolveAssetUrl(primaryImage.url);
+  }
+
+  const metadataImage = findMetadataImageUrl(item);
+  return metadataImage ? collectifyClient.resolveAssetUrl(metadataImage) : null;
+}
+
+function findMetadataImageUrl(item: CollectionItem) {
+  const metadataKeys = ["imageUrl", "posterUrl", "coverUrl", "artworkUrl", "coverArtArchive", "backdropUrl", "background"];
+
+  for (const reference of item.externalReferences) {
+    for (const key of metadataKeys) {
+      const value = reference.metadata[key];
+      if (isUsableImageUrl(value)) {
+        return value;
+      }
+    }
+  }
+
+  for (const key of metadataKeys) {
+    const value = item.attributes.find((attribute) => attribute.key.toLowerCase() === key.toLowerCase())?.value;
+    if (isUsableImageUrl(value)) {
+      return value;
+    }
+  }
+
+  return null;
+}
+
+function isUsableImageUrl(value?: string | null) {
+  return Boolean(value?.trim() && (value.startsWith("http://") || value.startsWith("https://") || value.startsWith("/")));
+}
+
 export function App() {
   const [collections, setCollections] = useState<CollectionSummary[]>([]);
   const [selectedCollection, setSelectedCollection] = useState<CollectionDetail | null>(null);
@@ -375,6 +411,7 @@ export function App() {
 
     addMetadataValue(metadata, "originalTitle", details.originalTitle);
     addMetadataValue(metadata, "year", details.year);
+    addMetadataValue(metadata, "imageUrl", details.posterUrl);
     addMetadataValue(metadata, "posterUrl", details.posterUrl);
     addMetadataValue(metadata, "backdropUrl", details.backdropUrl);
     addMetadataValue(metadata, "releaseDate", details.releaseDate);
@@ -741,78 +778,78 @@ export function App() {
           )}
 
           <div className="items-list">
-            {visibleItems.map(({ collectionId, collectionName, categoryName, item, tags, rating }) => (
-              <article className="item-row" key={item.id}>
-                <div className="item-row__avatar" aria-hidden="true">
-                  {item.images[0] ? (
-                    <img src={collectifyClient.resolveAssetUrl(item.images[0].url)} alt="" />
-                  ) : (
-                    item.title.slice(0, 1).toUpperCase()
-                  )}
-                </div>
-                <div className="item-row__content">
-                  <div className="item-row__title">
-                    <h3>{item.title}</h3>
-                    <span>{item.condition}</span>
+            {visibleItems.map(({ collectionId, collectionName, categoryName, item, tags, rating }) => {
+              const previewUrl = getItemPreviewUrl(item);
+
+              return (
+                <article className="item-row" key={item.id}>
+                  <div className="item-row__avatar" aria-hidden="true">
+                    {previewUrl ? <img src={previewUrl} alt="" /> : item.title.slice(0, 1).toUpperCase()}
                   </div>
-                  {searchIsActive && (
-                    <div className="result-meta">
-                      <span>{collectionName}</span>
-                      {categoryName && <span>{categoryName}</span>}
-                      {typeof rating === "number" && <span>Valutazione {rating}</span>}
+                  <div className="item-row__content">
+                    <div className="item-row__title">
+                      <h3>{item.title}</h3>
+                      <span>{item.condition}</span>
                     </div>
-                  )}
-                  {(item.description || item.notes) && <p>{item.description || item.notes}</p>}
-                  {tags.length > 0 && (
-                    <div className="tag-list">
-                      {tags.map((tag) => (
-                        <span key={tag.id}>{tag.label}</span>
-                      ))}
-                    </div>
-                  )}
-                  {item.attributes.length > 0 && (
-                    <div className="attribute-list">
-                      {item.attributes.map((attribute) => (
-                        <span key={attribute.id}>
-                          {attribute.label}: {attribute.value}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                  {item.images.length > 0 && (
-                    <div className="image-gallery">
-                      {item.images.map((image) => (
-                        <div className="image-thumb" key={image.id}>
-                          <img src={collectifyClient.resolveAssetUrl(image.url)} alt={image.caption ?? item.title} />
-                          <div className="image-thumb__actions">
-                            <label>
-                              Sostituisci
-                              <input
-                                accept="image/gif,image/jpeg,image/png,image/webp"
-                                type="file"
-                                onChange={(event) => void handleReplaceImage(collectionId, item.id, image.id, event.currentTarget.files)}
-                              />
-                            </label>
-                            <button type="button" onClick={() => void handleDeleteImage(collectionId, item.id, image.id)}>
-                              Elimina
-                            </button>
+                    {searchIsActive && (
+                      <div className="result-meta">
+                        <span>{collectionName}</span>
+                        {categoryName && <span>{categoryName}</span>}
+                        {typeof rating === "number" && <span>Valutazione {rating}</span>}
+                      </div>
+                    )}
+                    {(item.description || item.notes) && <p>{item.description || item.notes}</p>}
+                    {tags.length > 0 && (
+                      <div className="tag-list">
+                        {tags.map((tag) => (
+                          <span key={tag.id}>{tag.label}</span>
+                        ))}
+                      </div>
+                    )}
+                    {item.attributes.length > 0 && (
+                      <div className="attribute-list">
+                        {item.attributes.map((attribute) => (
+                          <span key={attribute.id}>
+                            {attribute.label}: {attribute.value}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    {item.images.length > 0 && (
+                      <div className="image-gallery">
+                        {item.images.map((image) => (
+                          <div className="image-thumb" key={image.id}>
+                            <img src={collectifyClient.resolveAssetUrl(image.url)} alt={image.caption ?? item.title} />
+                            <div className="image-thumb__actions">
+                              <label>
+                                Sostituisci
+                                <input
+                                  accept="image/gif,image/jpeg,image/png,image/webp"
+                                  type="file"
+                                  onChange={(event) => void handleReplaceImage(collectionId, item.id, image.id, event.currentTarget.files)}
+                                />
+                              </label>
+                              <button type="button" onClick={() => void handleDeleteImage(collectionId, item.id, image.id)}>
+                                Elimina
+                              </button>
+                            </div>
                           </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  <label className="inline-upload">
-                    Aggiungi immagine
-                    <input
-                      accept="image/gif,image/jpeg,image/png,image/webp"
-                      multiple
-                      type="file"
-                      onChange={(event) => void handleUploadImages(collectionId, item.id, event.currentTarget.files)}
-                    />
-                  </label>
-                </div>
-              </article>
-            ))}
+                        ))}
+                      </div>
+                    )}
+                    <label className="inline-upload">
+                      Aggiungi immagine
+                      <input
+                        accept="image/gif,image/jpeg,image/png,image/webp"
+                        multiple
+                        type="file"
+                        onChange={(event) => void handleUploadImages(collectionId, item.id, event.currentTarget.files)}
+                      />
+                    </label>
+                  </div>
+                </article>
+              );
+            })}
           </div>
         </section>
       </main>
