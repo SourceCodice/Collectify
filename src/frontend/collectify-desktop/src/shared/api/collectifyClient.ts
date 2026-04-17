@@ -174,6 +174,10 @@ export const collectifyClient = {
       method: "POST",
       body: JSON.stringify(payload)
     }),
+  deleteItem: (collectionId: string, itemId: string) =>
+    requestNoContent(`/api/collections/${collectionId}/items/${itemId}`, {
+      method: "DELETE"
+    }),
   uploadItemImage: (collectionId: string, itemId: string, file: File, options?: { caption?: string; isPrimary?: boolean }) =>
     uploadImage<ItemImage>(
       `/api/collections/${collectionId}/items/${itemId}/images`,

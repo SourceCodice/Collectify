@@ -24,6 +24,7 @@ type LoadState = "idle" | "loading" | "ready" | "error";
 type SearchState = "idle" | "loading" | "ready" | "error";
 type SettingsState = "idle" | "loading" | "ready" | "error";
 type MetadataResolutionState = "idle" | "loading" | "ready" | "error";
+type CollectionSortBy = "name" | "createdAt" | "personalRating";
 
 type AttributeDraft = {
   key: string;
@@ -58,6 +59,11 @@ type VisibleItem = {
   item: CollectionItem;
   tags: LocalSearchResult["tags"];
   rating?: number | null;
+};
+
+type SelectedItemContext = {
+  collectionId: string;
+  itemId: string;
 };
 
 const emptyCollectionForm: CreateCollectionPayload = {
@@ -195,6 +201,50 @@ function isUsableImageUrl(value?: string | null) {
   return Boolean(value?.trim() && (value.startsWith("http://") || value.startsWith("https://") || value.startsWith("/")));
 }
 
+function getPersonalRating(item: CollectionItem) {
+  const ratingAttribute = item.attributes.find((attribute) =>
+    ["personalrating", "ratingpersonale", "valutazionepersonale"].includes(attribute.key.trim().toLowerCase())
+  );
+  const value = ratingAttribute?.value?.replace(',', '.');
+  const parsed = value ? Number.parseFloat(value) : Number.NaN;
+
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function itemMatchesCollectionQuery(item: CollectionItem, query: string) {
+  const normalizedQuery = query.trim().toLowerCase();
+  if (!normalizedQuery) {
+    return true;
+  }
+
+  const searchableText = [
+    item.title,
+    item.description,
+    item.notes,
+    item.condition,
+    ...item.attributes.flatMap((attribute) => [attribute.label, attribute.value])
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  return searchableText.includes(normalizedQuery);
+}
+
+function sortCollectionItems(items: CollectionItem[], sortBy: CollectionSortBy) {
+  return [...items].sort((first, second) => {
+    if (sortBy === "createdAt") {
+      return new Date(second.createdAt).getTime() - new Date(first.createdAt).getTime();
+    }
+
+    if (sortBy === "personalRating") {
+      return (getPersonalRating(second) ?? -1) - (getPersonalRating(first) ?? -1);
+    }
+
+    return first.title.localeCompare(second.title, "it", { sensitivity: "base" });
+  });
+}
+
 export function App() {
   const [collections, setCollections] = useState<CollectionSummary[]>([]);
   const [selectedCollection, setSelectedCollection] = useState<CollectionDetail | null>(null);
@@ -202,13 +252,17 @@ export function App() {
   const [message, setMessage] = useState("Pronto");
   const [collectionModalOpen, setCollectionModalOpen] = useState(false);
   const [itemModalOpen, setItemModalOpen] = useState(false);
+  const [selectedItemContext, setSelectedItemContext] = useState<SelectedItemContext | null>(null);
   const [collectionForm, setCollectionForm] = useState<CreateCollectionPayload>(emptyCollectionForm);
   const [itemForm, setItemForm] = useState<CreateItemPayload>(emptyItemForm);
   const [itemType, setItemType] = useState("");
+  const [itemPersonalRating, setItemPersonalRating] = useState("");
   const [attributeDrafts, setAttributeDrafts] = useState<AttributeDraft[]>([{ key: "", value: "" }]);
   const [itemImageFiles, setItemImageFiles] = useState<File[]>([]);
   const [itemImagePreviews, setItemImagePreviews] = useState<ImagePreview[]>([]);
   const [searchFilters, setSearchFilters] = useState<SearchFilters>(emptySearchFilters);
+  const [collectionQuickSearch, setCollectionQuickSearch] = useState("");
+  const [collectionSortBy, setCollectionSortBy] = useState<CollectionSortBy>("name");
   const [searchResponse, setSearchResponse] = useState<LocalSearchResponse>(emptySearchResponse);
   const [searchState, setSearchState] = useState<SearchState>("idle");
   const [searchVersion, setSearchVersion] = useState(0);
@@ -365,13 +419,28 @@ export function App() {
       }));
     }
 
-    return selectedCollection?.items.map((item) => ({
-      collectionId: selectedCollection.id,
+    const collectionItems = selectedCollection?.items
+      .filter((item) => itemMatchesCollectionQuery(item, collectionQuickSearch)) ?? [];
+
+    return sortCollectionItems(collectionItems, collectionSortBy).map((item) => ({
+      collectionId: selectedCollection!.id,
       item,
       tags: [],
-      rating: null
-    })) ?? [];
-  }, [searchIsActive, searchResponse.items, selectedCollection]);
+      rating: getPersonalRating(item)
+    }));
+  }, [collectionQuickSearch, collectionSortBy, searchIsActive, searchResponse.items, selectedCollection]);
+
+  const selectedVisibleItem = useMemo(() => {
+    if (!selectedItemContext) {
+      return null;
+    }
+
+    return visibleItems.find(
+      (visibleItem) =>
+        visibleItem.collectionId === selectedItemContext.collectionId &&
+        visibleItem.item.id === selectedItemContext.itemId
+    ) ?? null;
+  }, [selectedItemContext, visibleItems]);
 
   const itemTypeOptions = useMemo(() => {
     return selectedCollection ? itemTypeOptionsByCollectionType[selectedCollection.type] ?? [selectedCollection.type] : [];
@@ -392,6 +461,7 @@ export function App() {
 
     setItemType(getDefaultItemType(selectedCollection.type));
     setItemForm(emptyItemForm);
+    setItemPersonalRating("");
     setAttributeDrafts([{ key: "", value: "" }]);
     setItemImageFiles([]);
     setItemModalOpen(true);
@@ -400,6 +470,7 @@ export function App() {
   function closeNewItemModal() {
     setItemModalOpen(false);
     setItemType("");
+    setItemPersonalRating("");
     setMetadataResolution(null);
   }
 
@@ -531,6 +602,16 @@ export function App() {
       });
     }
 
+    if (itemPersonalRating.trim() && !attributes.some((attribute) => attribute.key.toLowerCase() === "personalrating")) {
+      attributes.push({
+        key: "personalRating",
+        label: "Rating personale",
+        value: itemPersonalRating.trim(),
+        valueType: "Number",
+        unit: undefined
+      });
+    }
+
     try {
       const created = await collectifyClient.addItem(selectedCollection.id, {
         ...itemForm,
@@ -546,6 +627,7 @@ export function App() {
 
       setItemForm(emptyItemForm);
       setItemType("");
+      setItemPersonalRating("");
       setAttributeDrafts([{ key: "", value: "" }]);
       setItemImageFiles([]);
       setItemModalOpen(false);
@@ -598,6 +680,23 @@ export function App() {
       setMessage("Immagine eliminata.");
     } catch {
       setMessage("Eliminazione immagine non riuscita.");
+    }
+  }
+
+  async function handleDeleteItem(collectionId: string, itemId: string) {
+    const confirmed = window.confirm("Eliminare questo item dalla collezione?");
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      await collectifyClient.deleteItem(collectionId, itemId);
+      setSelectedItemContext(null);
+      await loadCollections(collectionId);
+      refreshSearchResults();
+      setMessage("Item eliminato dalla collezione.");
+    } catch {
+      setMessage("Eliminazione item non riuscita.");
     }
   }
 
@@ -761,6 +860,21 @@ export function App() {
             </button>
           </div>
 
+          {!searchIsActive && selectedCollection && (
+            <div className="collection-view-controls">
+              <input
+                value={collectionQuickSearch}
+                onChange={(event) => setCollectionQuickSearch(event.target.value)}
+                placeholder="Cerca in questa collezione"
+              />
+              <select value={collectionSortBy} onChange={(event) => setCollectionSortBy(event.target.value as CollectionSortBy)}>
+                <option value="name">Ordine alfabetico</option>
+                <option value="createdAt">Data di aggiunta</option>
+                <option value="personalRating">Rating personale</option>
+              </select>
+            </div>
+          )}
+
           {loadState === "error" && <div className="empty-state">Avvia il backend per leggere le collezioni locali.</div>}
           {searchState === "error" && <div className="empty-state">La ricerca locale non e' disponibile finche' il backend non risponde.</div>}
           {searchState === "loading" && searchIsActive && <div className="empty-state">Aggiornamento risultati...</div>}
@@ -777,82 +891,149 @@ export function App() {
             <div className="empty-state">Nessun elemento corrisponde ai filtri attuali.</div>
           )}
 
-          <div className="items-list">
-            {visibleItems.map(({ collectionId, collectionName, categoryName, item, tags, rating }) => {
+          {!searchIsActive && selectedCollection && selectedCollection.items.length > 0 && visibleItems.length === 0 && (
+            <div className="empty-state">Nessun elemento corrisponde alla ricerca in questa collezione.</div>
+          )}
+
+          <div className="items-grid">
+            {visibleItems.map(({ collectionId, collectionName, categoryName, item, rating }) => {
               const previewUrl = getItemPreviewUrl(item);
 
               return (
-                <article className="item-row" key={item.id}>
-                  <div className="item-row__avatar" aria-hidden="true">
+                <button
+                  className="item-card"
+                  key={item.id}
+                  type="button"
+                  onClick={() => setSelectedItemContext({ collectionId, itemId: item.id })}
+                >
+                  <div className="item-card__media" aria-hidden="true">
                     {previewUrl ? <img src={previewUrl} alt="" /> : item.title.slice(0, 1).toUpperCase()}
                   </div>
-                  <div className="item-row__content">
-                    <div className="item-row__title">
-                      <h3>{item.title}</h3>
-                      <span>{item.condition}</span>
-                    </div>
+                  <div className="item-card__body">
+                    <strong>{item.title}</strong>
                     {searchIsActive && (
-                      <div className="result-meta">
-                        <span>{collectionName}</span>
-                        {categoryName && <span>{categoryName}</span>}
-                        {typeof rating === "number" && <span>Valutazione {rating}</span>}
-                      </div>
+                      <span>
+                        {[collectionName, categoryName, typeof rating === "number" ? `Rating ${rating}` : null]
+                          .filter(Boolean)
+                          .join(" - ")}
+                      </span>
                     )}
-                    {(item.description || item.notes) && <p>{item.description || item.notes}</p>}
-                    {tags.length > 0 && (
-                      <div className="tag-list">
-                        {tags.map((tag) => (
-                          <span key={tag.id}>{tag.label}</span>
-                        ))}
-                      </div>
-                    )}
-                    {item.attributes.length > 0 && (
-                      <div className="attribute-list">
-                        {item.attributes.map((attribute) => (
-                          <span key={attribute.id}>
-                            {attribute.label}: {attribute.value}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                    {item.images.length > 0 && (
-                      <div className="image-gallery">
-                        {item.images.map((image) => (
-                          <div className="image-thumb" key={image.id}>
-                            <img src={collectifyClient.resolveAssetUrl(image.url)} alt={image.caption ?? item.title} />
-                            <div className="image-thumb__actions">
-                              <label>
-                                Sostituisci
-                                <input
-                                  accept="image/gif,image/jpeg,image/png,image/webp"
-                                  type="file"
-                                  onChange={(event) => void handleReplaceImage(collectionId, item.id, image.id, event.currentTarget.files)}
-                                />
-                              </label>
-                              <button type="button" onClick={() => void handleDeleteImage(collectionId, item.id, image.id)}>
-                                Elimina
-                              </button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    <label className="inline-upload">
-                      Aggiungi immagine
-                      <input
-                        accept="image/gif,image/jpeg,image/png,image/webp"
-                        multiple
-                        type="file"
-                        onChange={(event) => void handleUploadImages(collectionId, item.id, event.currentTarget.files)}
-                      />
-                    </label>
                   </div>
-                </article>
+                </button>
               );
             })}
           </div>
         </section>
       </main>
+
+      {selectedVisibleItem && (
+        <div className="modal-backdrop" role="presentation">
+          <div className="modal modal--wide item-detail-modal" role="dialog" aria-modal="true">
+            <div className="modal__header">
+              <h2>{selectedVisibleItem.item.title}</h2>
+              <button type="button" onClick={() => setSelectedItemContext(null)} aria-label="Chiudi">
+                x
+              </button>
+            </div>
+            <div className="item-detail-layout">
+              <div className="item-detail-cover">
+                {getItemPreviewUrl(selectedVisibleItem.item) ? (
+                  <img src={getItemPreviewUrl(selectedVisibleItem.item)!} alt="" />
+                ) : (
+                  <span>{selectedVisibleItem.item.title.slice(0, 1).toUpperCase()}</span>
+                )}
+              </div>
+              <div className="item-detail-content">
+                <div className="result-meta">
+                  <span>{selectedVisibleItem.item.condition}</span>
+                  <span>Aggiunto {new Date(selectedVisibleItem.item.createdAt).toLocaleDateString("it-IT")}</span>
+                  {getPersonalRating(selectedVisibleItem.item) !== null && (
+                    <span>Rating {getPersonalRating(selectedVisibleItem.item)}</span>
+                  )}
+                </div>
+                {selectedVisibleItem.item.description && <p>{selectedVisibleItem.item.description}</p>}
+                {selectedVisibleItem.item.notes && <p>{selectedVisibleItem.item.notes}</p>}
+                {selectedVisibleItem.item.attributes.length > 0 && (
+                  <div className="attribute-list">
+                    {selectedVisibleItem.item.attributes.map((attribute) => (
+                      <span key={attribute.id}>
+                        {attribute.label}: {attribute.value}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {selectedVisibleItem.item.externalReferences.length > 0 && (
+                  <div className="external-reference-list">
+                    {selectedVisibleItem.item.externalReferences.map((reference) => (
+                      <a
+                        href={reference.url ?? "#"}
+                        key={reference.id}
+                        target="_blank"
+                        rel="noreferrer"
+                        aria-disabled={!reference.url}
+                      >
+                        {reference.provider}
+                      </a>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+            {selectedVisibleItem.item.images.length > 0 && (
+              <div className="image-gallery">
+                {selectedVisibleItem.item.images.map((image) => (
+                  <div className="image-thumb" key={image.id}>
+                    <img src={collectifyClient.resolveAssetUrl(image.url)} alt={image.caption ?? selectedVisibleItem.item.title} />
+                    <div className="image-thumb__actions">
+                      <label>
+                        Sostituisci
+                        <input
+                          accept="image/gif,image/jpeg,image/png,image/webp"
+                          type="file"
+                          onChange={(event) =>
+                            void handleReplaceImage(
+                              selectedVisibleItem.collectionId,
+                              selectedVisibleItem.item.id,
+                              image.id,
+                              event.currentTarget.files
+                            )
+                          }
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => void handleDeleteImage(selectedVisibleItem.collectionId, selectedVisibleItem.item.id, image.id)}
+                      >
+                        Elimina
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="item-detail-actions">
+              <label className="inline-upload">
+                Aggiungi immagine
+                <input
+                  accept="image/gif,image/jpeg,image/png,image/webp"
+                  multiple
+                  type="file"
+                  onChange={(event) =>
+                    void handleUploadImages(selectedVisibleItem.collectionId, selectedVisibleItem.item.id, event.currentTarget.files)
+                  }
+                />
+              </label>
+              <button
+                className="danger-action"
+                type="button"
+                onClick={() => void handleDeleteItem(selectedVisibleItem.collectionId, selectedVisibleItem.item.id)}
+              >
+                Elimina item
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {collectionModalOpen && (
         <div className="modal-backdrop" role="presentation">
@@ -1053,6 +1234,18 @@ export function App() {
                   type="date"
                   value={itemForm.acquiredAt ?? ""}
                   onChange={(event) => setItemForm((current) => ({ ...current, acquiredAt: event.target.value }))}
+                />
+              </label>
+              <label>
+                Rating personale
+                <input
+                  min="0"
+                  max="10"
+                  step="0.5"
+                  type="number"
+                  value={itemPersonalRating}
+                  onChange={(event) => setItemPersonalRating(event.target.value)}
+                  placeholder="0-10"
                 />
               </label>
             </div>
