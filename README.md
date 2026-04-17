@@ -50,4 +50,18 @@ Collectify e' nelle prime fasi di sviluppo. La versione attuale introduce le bas
 
 ## Licenza
 
+Third-Party APIs
+
+Collectify integrates with external services to enrich item data.
+
+TMDb (The Movie Database)
+
+This product uses the TMDb API but is not endorsed or certified by TMDb.
+
+TMDb is used to retrieve metadata such as movie titles, descriptions, release dates and images when adding items to collections.
+
+For more information visit: https://www.themoviedb.org/
+
+## Licenza
+
 Collectify e' distribuito con licenza MIT.
