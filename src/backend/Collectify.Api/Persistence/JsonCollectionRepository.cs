@@ -21,81 +21,102 @@ public sealed class JsonCollectionRepository(ICollectifyDataStore dataStore) : I
 
     public async Task<Collection> AddAsync(Collection collection, CancellationToken cancellationToken)
     {
-        var document = await dataStore.LoadAsync(cancellationToken);
-
-        document.Collections.Add(collection);
-        await dataStore.SaveAsync(document, cancellationToken);
-
-        return collection;
+        return await dataStore.UpdateAsync(document =>
+        {
+            document.Collections.Add(collection);
+            return DataStoreUpdate<Collection>.Changed(collection);
+        }, cancellationToken);
     }
 
     public async Task<Collection?> SaveAsync(Collection collection, CancellationToken cancellationToken)
     {
-        var document = await dataStore.LoadAsync(cancellationToken);
-        var existing = document.Collections.FirstOrDefault(current => current.Id == collection.Id);
-
-        if (existing is null)
+        return await dataStore.UpdateAsync(document =>
         {
-            return null;
-        }
+            var existing = document.Collections.FirstOrDefault(current => current.Id == collection.Id);
 
-        var index = document.Collections.IndexOf(existing);
-        document.Collections[index] = collection;
+            if (existing is null)
+            {
+                return DataStoreUpdate<Collection?>.Unchanged(null);
+            }
 
-        await dataStore.SaveAsync(document, cancellationToken);
-        return collection;
+            var index = document.Collections.IndexOf(existing);
+            document.Collections[index] = collection;
+
+            return DataStoreUpdate<Collection?>.Changed(collection);
+        }, cancellationToken);
     }
 
     public async Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken)
     {
-        var document = await dataStore.LoadAsync(cancellationToken);
-        var deleted = document.Collections.RemoveAll(collection => collection.Id == id) > 0;
-
-        if (deleted)
+        return await dataStore.UpdateAsync(document =>
         {
-            await dataStore.SaveAsync(document, cancellationToken);
-        }
+            var deleted = document.Collections.RemoveAll(collection => collection.Id == id) > 0;
+            return deleted
+                ? DataStoreUpdate<bool>.Changed(true)
+                : DataStoreUpdate<bool>.Unchanged(false);
+        }, cancellationToken);
+    }
 
-        return deleted;
+    public async Task<TResult?> UpdateAsync<TResult>(
+        Guid id,
+        Func<Collection, CollectionUpdate<TResult>> update,
+        CancellationToken cancellationToken)
+    {
+        return await dataStore.UpdateAsync(document =>
+        {
+            var collection = document.Collections.FirstOrDefault(current => current.Id == id);
+
+            if (collection is null)
+            {
+                return DataStoreUpdate<TResult?>.Unchanged(default);
+            }
+
+            var result = update(collection);
+            return result.HasChanges
+                ? DataStoreUpdate<TResult?>.Changed(result.Value)
+                : DataStoreUpdate<TResult?>.Unchanged(result.Value);
+        }, cancellationToken);
     }
 
     public async Task<Item?> AddItemAsync(Guid collectionId, Item item, CancellationToken cancellationToken)
     {
-        var document = await dataStore.LoadAsync(cancellationToken);
-        var collection = document.Collections.FirstOrDefault(current => current.Id == collectionId);
-
-        if (collection is null)
+        return await dataStore.UpdateAsync(document =>
         {
-            return null;
-        }
+            var collection = document.Collections.FirstOrDefault(current => current.Id == collectionId);
 
-        item.CollectionId = collectionId;
-        collection.Items.Add(item);
-        collection.UpdatedAt = item.UpdatedAt;
+            if (collection is null)
+            {
+                return DataStoreUpdate<Item?>.Unchanged(null);
+            }
 
-        await dataStore.SaveAsync(document, cancellationToken);
-        return item;
+            item.CollectionId = collectionId;
+            collection.Items.Add(item);
+            collection.UpdatedAt = item.UpdatedAt;
+
+            return DataStoreUpdate<Item?>.Changed(item);
+        }, cancellationToken);
     }
 
     public async Task<bool> DeleteItemAsync(Guid collectionId, Guid itemId, CancellationToken cancellationToken)
     {
-        var document = await dataStore.LoadAsync(cancellationToken);
-        var collection = document.Collections.FirstOrDefault(current => current.Id == collectionId);
-
-        if (collection is null)
+        return await dataStore.UpdateAsync(document =>
         {
-            return false;
-        }
+            var collection = document.Collections.FirstOrDefault(current => current.Id == collectionId);
 
-        var deleted = collection.Items.RemoveAll(item => item.Id == itemId) > 0;
+            if (collection is null)
+            {
+                return DataStoreUpdate<bool>.Unchanged(false);
+            }
 
-        if (deleted)
-        {
+            var deleted = collection.Items.RemoveAll(item => item.Id == itemId) > 0;
+
+            if (!deleted)
+            {
+                return DataStoreUpdate<bool>.Unchanged(false);
+            }
+
             collection.UpdatedAt = DateTimeOffset.UtcNow;
-            await dataStore.SaveAsync(document, cancellationToken);
-        }
-
-        return deleted;
+            return DataStoreUpdate<bool>.Changed(true);
+        }, cancellationToken);
     }
-
 }

@@ -29,21 +29,29 @@ public sealed class ItemImageApplicationService(
             return ValidationResult<ItemImageResponse?>.Failure(errors);
         }
 
-        var collection = await repository.GetAsync(collectionId, cancellationToken);
-        var item = collection?.Items.FirstOrDefault(current => current.Id == itemId);
-
-        if (collection is null || item is null)
+        var image = await CopyImageAsync(file, caption, isPrimary, cancellationToken);
+        var response = await repository.UpdateAsync(collectionId, collection =>
         {
-            return ValidationResult<ItemImageResponse?>.Success(null);
+            var item = collection.Items.FirstOrDefault(current => current.Id == itemId);
+            if (item is null)
+            {
+                return CollectionUpdate<ItemImageResponse?>.Unchanged();
+            }
+
+            image.IsPrimary = image.IsPrimary || item.Images.Count == 0;
+            ApplyPrimaryFlag(item, image);
+            item.Images.Add(image);
+            Touch(item, collection);
+
+            return CollectionUpdate<ItemImageResponse?>.Changed(image.ToResponse());
+        }, cancellationToken);
+
+        if (response is null)
+        {
+            DeletePhysicalImage(image.RelativePath);
         }
 
-        var image = await CopyImageAsync(file, caption, isPrimary || item.Images.Count == 0, cancellationToken);
-        ApplyPrimaryFlag(item, image);
-        item.Images.Add(image);
-        Touch(item, collection);
-
-        await repository.SaveAsync(collection, cancellationToken);
-        return ValidationResult<ItemImageResponse?>.Success(image.ToResponse());
+        return ValidationResult<ItemImageResponse?>.Success(response);
     }
 
     public async Task<ValidationResult<ItemImageResponse?>> ReplaceImageAsync(
@@ -61,59 +69,82 @@ public sealed class ItemImageApplicationService(
             return ValidationResult<ItemImageResponse?>.Failure(errors);
         }
 
-        var collection = await repository.GetAsync(collectionId, cancellationToken);
-        var item = collection?.Items.FirstOrDefault(current => current.Id == itemId);
-        var currentImage = item?.Images.FirstOrDefault(image => image.Id == imageId);
-
-        if (collection is null || item is null || currentImage is null)
+        var replacement = await CopyImageAsync(
+            file,
+            caption,
+            isPrimary ?? false,
+            cancellationToken);
+        string? oldRelativePath = null;
+        var response = await repository.UpdateAsync(collectionId, collection =>
         {
+            var item = collection.Items.FirstOrDefault(current => current.Id == itemId);
+            var currentImage = item?.Images.FirstOrDefault(image => image.Id == imageId);
+
+            if (item is null || currentImage is null)
+            {
+                return CollectionUpdate<ItemImageResponse?>.Unchanged();
+            }
+
+            oldRelativePath = currentImage.RelativePath;
+            replacement.Id = currentImage.Id;
+            replacement.Caption = Normalize(caption) ?? currentImage.Caption;
+            replacement.IsPrimary = isPrimary ?? currentImage.IsPrimary;
+            replacement.CreatedAt = currentImage.CreatedAt;
+
+            var index = item.Images.IndexOf(currentImage);
+            item.Images[index] = replacement;
+            ApplyPrimaryFlag(item, replacement);
+            Touch(item, collection);
+
+            return CollectionUpdate<ItemImageResponse?>.Changed(replacement.ToResponse());
+        }, cancellationToken);
+
+        if (response is null)
+        {
+            DeletePhysicalImage(replacement.RelativePath);
             return ValidationResult<ItemImageResponse?>.Success(null);
         }
 
-        var replacement = await CopyImageAsync(
-            file,
-            caption ?? currentImage.Caption,
-            isPrimary ?? currentImage.IsPrimary,
-            cancellationToken);
+        if (oldRelativePath is not null)
+        {
+            DeletePhysicalImage(oldRelativePath);
+        }
 
-        replacement.Id = currentImage.Id;
-        replacement.CreatedAt = currentImage.CreatedAt;
-
-        var index = item.Images.IndexOf(currentImage);
-        item.Images[index] = replacement;
-        ApplyPrimaryFlag(item, replacement);
-        Touch(item, collection);
-
-        await repository.SaveAsync(collection, cancellationToken);
-        DeletePhysicalImage(currentImage.RelativePath);
-
-        return ValidationResult<ItemImageResponse?>.Success(replacement.ToResponse());
+        return ValidationResult<ItemImageResponse?>.Success(response);
     }
 
     public async Task<bool> DeleteImageAsync(Guid collectionId, Guid itemId, Guid imageId, CancellationToken cancellationToken)
     {
-        var collection = await repository.GetAsync(collectionId, cancellationToken);
-        var item = collection?.Items.FirstOrDefault(current => current.Id == itemId);
-        var image = item?.Images.FirstOrDefault(current => current.Id == imageId);
-
-        if (collection is null || item is null || image is null)
+        string? relativePath = null;
+        var deleted = await repository.UpdateAsync(collectionId, collection =>
         {
-            return false;
+            var item = collection.Items.FirstOrDefault(current => current.Id == itemId);
+            var image = item?.Images.FirstOrDefault(current => current.Id == imageId);
+
+            if (item is null || image is null)
+            {
+                return CollectionUpdate<bool>.Unchanged(false);
+            }
+
+            relativePath = image.RelativePath;
+            item.Images.Remove(image);
+
+            if (image.IsPrimary && item.Images.Count > 0)
+            {
+                item.Images[0].IsPrimary = true;
+                item.Images[0].UpdatedAt = DateTimeOffset.UtcNow;
+            }
+
+            Touch(item, collection);
+            return CollectionUpdate<bool>.Changed(true);
+        }, cancellationToken);
+
+        if (deleted == true && relativePath is not null)
+        {
+            DeletePhysicalImage(relativePath);
         }
 
-        item.Images.Remove(image);
-
-        if (image.IsPrimary && item.Images.Count > 0)
-        {
-            item.Images[0].IsPrimary = true;
-            item.Images[0].UpdatedAt = DateTimeOffset.UtcNow;
-        }
-
-        Touch(item, collection);
-        await repository.SaveAsync(collection, cancellationToken);
-        DeletePhysicalImage(image.RelativePath);
-
-        return true;
+        return deleted == true;
     }
 
     private async Task<ItemImage> CopyImageAsync(IFormFile file, string? caption, bool isPrimary, CancellationToken cancellationToken)

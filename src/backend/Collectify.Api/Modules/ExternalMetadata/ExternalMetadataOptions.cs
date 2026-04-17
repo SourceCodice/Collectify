@@ -21,6 +21,7 @@ public sealed class ExternalMetadataOptions
     };
 
     public ExternalMetadataRetryOptions Retry { get; set; } = new();
+    public MetadataProviderResolverOptions ProviderResolver { get; set; } = new();
 }
 
 public class ExternalMetadataProviderOptions
@@ -40,4 +41,26 @@ public sealed class ExternalMetadataRetryOptions
 {
     public int MaxRetries { get; set; } = 2;
     public int InitialDelayMilliseconds { get; set; } = 500;
+}
+
+public sealed class MetadataProviderResolverOptions
+{
+    public Dictionary<string, MetadataCategoryProviderOptions> Categories { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+}
+
+public sealed class MetadataCategoryProviderOptions
+{
+    public bool ManualEntryOnly { get; set; }
+    public List<string> Aliases { get; set; } = [];
+    public List<MetadataProviderReferenceOptions> Providers { get; set; } = [];
+}
+
+public sealed class MetadataProviderReferenceOptions
+{
+    public string ProviderId { get; set; } = string.Empty;
+    public string DisplayName { get; set; } = string.Empty;
+    public string Kind { get; set; } = string.Empty;
+    public string Role { get; set; } = MetadataProviderRoles.Primary;
+    public bool IsEnabled { get; set; } = true;
+    public string? Notes { get; set; }
 }

@@ -38,7 +38,10 @@ public sealed class TmdbMetadataProvider(IHttpClientFactory httpClientFactory, I
                 BuildPosterUrl(movie.PosterPath),
                 movie.ReleaseDate,
                 $"https://www.themoviedb.org/movie/{movie.Id}",
-                Metadata(("originalTitle", movie.OriginalTitle), ("voteAverage", movie.VoteAverage?.ToString("0.0")))))
+                Metadata(
+                    ("originalTitle", movie.OriginalTitle),
+                    ("voteAverage", movie.VoteAverage?.ToString("0.0")),
+                    ("backdropUrl", BuildBackdropUrl(movie.BackdropPath)))))
             .ToList() ?? [];
     }
 
@@ -81,7 +84,11 @@ public sealed class TmdbMetadataProvider(IHttpClientFactory httpClientFactory, I
             response.ReleaseDate,
             $"https://www.themoviedb.org/movie/{response.Id}",
             attributes,
-            Metadata(("imdbId", response.ImdbId), ("homepage", response.Homepage), ("originalTitle", response.OriginalTitle)));
+            Metadata(
+                ("imdbId", response.ImdbId),
+                ("homepage", response.Homepage),
+                ("originalTitle", response.OriginalTitle),
+                ("backdropUrl", BuildBackdropUrl(response.BackdropPath))));
     }
 
     private void EnsureConfigured()
@@ -110,6 +117,11 @@ public sealed class TmdbMetadataProvider(IHttpClientFactory httpClientFactory, I
         return string.IsNullOrWhiteSpace(path) ? null : $"https://image.tmdb.org/t/p/w500{path}";
     }
 
+    private static string? BuildBackdropUrl(string? path)
+    {
+        return string.IsNullOrWhiteSpace(path) ? null : $"https://image.tmdb.org/t/p/w1280{path}";
+    }
+
     private sealed class TmdbSearchResponse
     {
         public List<TmdbMovieSummary> Results { get; set; } = [];
@@ -124,6 +136,8 @@ public sealed class TmdbMetadataProvider(IHttpClientFactory httpClientFactory, I
         public string? Overview { get; set; }
         [JsonPropertyName("poster_path")]
         public string? PosterPath { get; set; }
+        [JsonPropertyName("backdrop_path")]
+        public string? BackdropPath { get; set; }
         [JsonPropertyName("release_date")]
         public string? ReleaseDate { get; set; }
         [JsonPropertyName("vote_average")]

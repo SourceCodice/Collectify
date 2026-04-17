@@ -1,5 +1,10 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { collectionTypeLabels, collectionTypes } from "../features/collections/CollectionTypeCatalog";
+import {
+  collectionTypeLabels,
+  collectionTypes,
+  getDefaultItemType,
+  itemTypeOptionsByCollectionType
+} from "../features/collections/CollectionTypeCatalog";
 import type {
   CollectionDetail,
   CollectionItem,
@@ -7,6 +12,9 @@ import type {
   CreateCollectionPayload,
   CreateItemPayload
 } from "../features/collections/types";
+import { DataTransferPanel } from "../features/dataTransfer/DataTransferPanel";
+import { AutocompleteSearch } from "../features/externalMetadata/AutocompleteSearch";
+import type { LiveMetadataDetails, MetadataProviderResolution } from "../features/externalMetadata/types";
 import type { LocalSearchResponse, LocalSearchResult } from "../features/search/types";
 import type { AppSettings, UpdateAppSettingsPayload } from "../features/settings/types";
 import { collectifyClient } from "../shared/api/collectifyClient";
@@ -15,11 +23,14 @@ import "./App.css";
 type LoadState = "idle" | "loading" | "ready" | "error";
 type SearchState = "idle" | "loading" | "ready" | "error";
 type SettingsState = "idle" | "loading" | "ready" | "error";
-type DataTransferState = "idle" | "running" | "success" | "error";
+type MetadataResolutionState = "idle" | "loading" | "ready" | "error";
 
 type AttributeDraft = {
   key: string;
+  label?: string;
   value: string;
+  valueType?: string;
+  unit?: string;
 };
 
 type ImagePreview = {
@@ -98,6 +109,56 @@ const emptySettingsForm: UpdateAppSettingsPayload = {
   language: "it-IT"
 };
 
+function addMetadataValue(target: Record<string, string>, key: string, value: string | number | null | undefined) {
+  if (value !== null && value !== undefined && String(value).trim()) {
+    target[key] = String(value);
+  }
+}
+
+function buildMetadataAttributeDrafts(details: LiveMetadataDetails, itemType: string): AttributeDraft[] {
+  return [
+    { key: "itemType", label: "Tipo item", value: itemType },
+    { key: "originalTitle", label: "Titolo originale", value: details.originalTitle ?? "" },
+    { key: "year", label: "Anno", value: details.year ?? "", valueType: "Number" },
+    { key: "genres", label: "Generi", value: details.genres.join(", ") },
+    { key: "posterUrl", label: "Poster", value: details.posterUrl ?? "", valueType: "Url" },
+    { key: "backdropUrl", label: "Backdrop", value: details.backdropUrl ?? "", valueType: "Url" },
+    {
+      key: "runtimeMinutes",
+      label: "Durata",
+      value: details.runtimeMinutes?.toString() ?? "",
+      valueType: "Number",
+      unit: "min"
+    },
+    { key: "releaseDate", label: "Data uscita", value: details.releaseDate ?? "", valueType: "Date" },
+    {
+      key: "externalRating",
+      label: "Rating esterno",
+      value: details.externalRating?.toString() ?? "",
+      valueType: "Number"
+    },
+    { key: "providerSourceId", label: "Provider source id", value: details.sourceId },
+    { key: "providerSourceName", label: "Provider source name", value: details.sourceName }
+  ].filter((attribute) => attribute.value.trim());
+}
+
+function mergeAttributeDrafts(current: AttributeDraft[], incoming: AttributeDraft[]) {
+  const filledCurrent = current.filter((attribute) => attribute.key.trim() || attribute.value.trim());
+  const next = [...filledCurrent];
+
+  incoming.forEach((attribute) => {
+    const existingIndex = next.findIndex((draft) => draft.key.trim().toLowerCase() === attribute.key.toLowerCase());
+
+    if (existingIndex >= 0) {
+      next[existingIndex] = attribute;
+    } else {
+      next.push(attribute);
+    }
+  });
+
+  return next.length > 0 ? next : [{ key: "", value: "" }];
+}
+
 export function App() {
   const [collections, setCollections] = useState<CollectionSummary[]>([]);
   const [selectedCollection, setSelectedCollection] = useState<CollectionDetail | null>(null);
@@ -107,6 +168,7 @@ export function App() {
   const [itemModalOpen, setItemModalOpen] = useState(false);
   const [collectionForm, setCollectionForm] = useState<CreateCollectionPayload>(emptyCollectionForm);
   const [itemForm, setItemForm] = useState<CreateItemPayload>(emptyItemForm);
+  const [itemType, setItemType] = useState("");
   const [attributeDrafts, setAttributeDrafts] = useState<AttributeDraft[]>([{ key: "", value: "" }]);
   const [itemImageFiles, setItemImageFiles] = useState<File[]>([]);
   const [itemImagePreviews, setItemImagePreviews] = useState<ImagePreview[]>([]);
@@ -118,8 +180,8 @@ export function App() {
   const [settingsState, setSettingsState] = useState<SettingsState>("idle");
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [settingsForm, setSettingsForm] = useState<UpdateAppSettingsPayload>(emptySettingsForm);
-  const [dataTransferState, setDataTransferState] = useState<DataTransferState>("idle");
-  const [dataTransferMessage, setDataTransferMessage] = useState("Backup, export e import lavorano solo sui file JSON locali.");
+  const [metadataResolution, setMetadataResolution] = useState<MetadataProviderResolution | null>(null);
+  const [metadataResolutionState, setMetadataResolutionState] = useState<MetadataResolutionState>("idle");
 
   async function loadCollections(preferredCollectionId?: string) {
     setLoadState("loading");
@@ -205,6 +267,37 @@ export function App() {
     };
   }, [itemImageFiles]);
 
+  useEffect(() => {
+    if (!itemModalOpen || !selectedCollection) {
+      setMetadataResolution(null);
+      setMetadataResolutionState("idle");
+      return;
+    }
+
+    const category = itemType || getDefaultItemType(selectedCollection.type);
+    let cancelled = false;
+    setMetadataResolutionState("loading");
+
+    collectifyClient
+      .resolveExternalMetadataProviders(category)
+      .then((resolution) => {
+        if (!cancelled) {
+          setMetadataResolution(resolution);
+          setMetadataResolutionState("ready");
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setMetadataResolution(null);
+          setMetadataResolutionState("error");
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [itemModalOpen, itemType, selectedCollection?.type]);
+
   const totalItems = useMemo(
     () => collections.reduce((total, collection) => total + collection.itemCount, 0),
     [collections]
@@ -244,12 +337,65 @@ export function App() {
     })) ?? [];
   }, [searchIsActive, searchResponse.items, selectedCollection]);
 
+  const itemTypeOptions = useMemo(() => {
+    return selectedCollection ? itemTypeOptionsByCollectionType[selectedCollection.type] ?? [selectedCollection.type] : [];
+  }, [selectedCollection]);
+
   function updateSearchFilter<Key extends keyof SearchFilters>(key: Key, value: SearchFilters[Key]) {
     setSearchFilters((current) => ({ ...current, [key]: value }));
   }
 
   function refreshSearchResults() {
     setSearchVersion((current) => current + 1);
+  }
+
+  function openNewItemModal() {
+    if (!selectedCollection) {
+      return;
+    }
+
+    setItemType(getDefaultItemType(selectedCollection.type));
+    setItemForm(emptyItemForm);
+    setAttributeDrafts([{ key: "", value: "" }]);
+    setItemImageFiles([]);
+    setItemModalOpen(true);
+  }
+
+  function closeNewItemModal() {
+    setItemModalOpen(false);
+    setItemType("");
+    setMetadataResolution(null);
+  }
+
+  function applyMetadataDetails(details: LiveMetadataDetails) {
+    const metadata: Record<string, string> = {
+      kind: details.kind,
+      sourceName: details.sourceName
+    };
+
+    addMetadataValue(metadata, "originalTitle", details.originalTitle);
+    addMetadataValue(metadata, "year", details.year);
+    addMetadataValue(metadata, "posterUrl", details.posterUrl);
+    addMetadataValue(metadata, "backdropUrl", details.backdropUrl);
+    addMetadataValue(metadata, "releaseDate", details.releaseDate);
+    addMetadataValue(metadata, "externalRating", details.externalRating?.toString());
+
+    setItemForm((current) => ({
+      ...current,
+      title: details.title,
+      description: details.description ?? current.description,
+      notes: details.externalUrl ? `Importato da ${details.sourceName}: ${details.externalUrl}` : current.notes,
+      externalReferences: [
+        {
+          provider: details.provider,
+          externalId: details.sourceId,
+          url: details.externalUrl ?? undefined,
+          metadata
+        }
+      ]
+    }));
+
+    setAttributeDrafts((current) => mergeAttributeDrafts(current, buildMetadataAttributeDrafts(details, itemType)));
   }
 
   async function loadSettings() {
@@ -297,70 +443,6 @@ export function App() {
     }
   }
 
-  async function handleCreateBackup() {
-    setDataTransferState("running");
-    setDataTransferMessage("Creazione backup in corso...");
-
-    try {
-      const result = await collectifyClient.createBackup();
-      setDataTransferState("success");
-      setDataTransferMessage(
-        result.files.length > 0
-          ? `Backup creato con ${result.files.length} file in ${result.backupDirectoryPath}.`
-          : result.messages.join(" ") || "Backup completato, ma non sono stati copiati file."
-      );
-      setMessage("Backup locale creato.");
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Backup non riuscito.";
-      setDataTransferState("error");
-      setDataTransferMessage(errorMessage);
-      setMessage(errorMessage);
-    }
-  }
-
-  async function handleExportData() {
-    setDataTransferState("running");
-    setDataTransferMessage("Preparazione export JSON...");
-
-    try {
-      const fileName = await collectifyClient.exportData();
-      setDataTransferState("success");
-      setDataTransferMessage(`Export creato: ${fileName}.`);
-      setMessage("Export JSON pronto.");
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Export non riuscito.";
-      setDataTransferState("error");
-      setDataTransferMessage(errorMessage);
-      setMessage(errorMessage);
-    }
-  }
-
-  async function handleImportData(files: FileList | null) {
-    const file = files?.[0];
-    if (!file) {
-      return;
-    }
-
-    setDataTransferState("running");
-    setDataTransferMessage("Validazione e import del file JSON...");
-
-    try {
-      const result = await collectifyClient.importData(file);
-      await loadCollections(selectedCollection?.id);
-      refreshSearchResults();
-      setDataTransferState("success");
-      setDataTransferMessage(
-        `Import completato: ${result.importedCollections} collezioni e ${result.importedItems} elementi aggiunti. ${result.messages.join(" ")}`
-      );
-      setMessage("Import JSON completato.");
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Import non riuscito.";
-      setDataTransferState("error");
-      setDataTransferMessage(errorMessage);
-      setMessage(errorMessage);
-    }
-  }
-
   async function handleCreateCollection(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
@@ -396,10 +478,21 @@ export function App() {
       .filter((attribute) => attribute.key.trim() || attribute.value.trim())
       .map((attribute) => ({
         key: attribute.key.trim(),
-        label: attribute.key.trim(),
+        label: attribute.label?.trim() || attribute.key.trim(),
         value: attribute.value.trim(),
-        valueType: "Text"
+        valueType: attribute.valueType ?? "Text",
+        unit: attribute.unit
       }));
+
+    if (itemType.trim() && !attributes.some((attribute) => attribute.key.toLowerCase() === "itemtype")) {
+      attributes.push({
+        key: "itemType",
+        label: "Tipo item",
+        value: itemType.trim(),
+        valueType: "Text",
+        unit: undefined
+      });
+    }
 
     try {
       const created = await collectifyClient.addItem(selectedCollection.id, {
@@ -415,6 +508,7 @@ export function App() {
       }
 
       setItemForm(emptyItemForm);
+      setItemType("");
       setAttributeDrafts([{ key: "", value: "" }]);
       setItemImageFiles([]);
       setItemModalOpen(false);
@@ -623,7 +717,7 @@ export function App() {
               className="secondary-action"
               type="button"
               disabled={!selectedCollection}
-              onClick={() => setItemModalOpen(true)}
+              onClick={openNewItemModal}
             >
               <span aria-hidden="true">+</span>
               Nuovo elemento
@@ -839,45 +933,13 @@ export function App() {
                 <strong>{settings?.backupsPath ?? "Non disponibile"}</strong>
               </div>
             </div>
-            <section className="data-transfer-panel" aria-label="Backup export import">
-              <div className="data-transfer-panel__header">
-                <div>
-                  <span>Portabilita' dati</span>
-                  <strong>Backup, export e import JSON</strong>
-                </div>
-              </div>
-              <div className="data-transfer-actions">
-                <button
-                  className="secondary-action"
-                  disabled={dataTransferState === "running"}
-                  type="button"
-                  onClick={() => void handleCreateBackup()}
-                >
-                  Crea backup
-                </button>
-                <button
-                  className="secondary-action"
-                  disabled={dataTransferState === "running"}
-                  type="button"
-                  onClick={() => void handleExportData()}
-                >
-                  Esporta JSON
-                </button>
-                <label className={dataTransferState === "running" ? "import-action is-disabled" : "import-action"}>
-                  Importa JSON
-                  <input
-                    accept="application/json,.json"
-                    disabled={dataTransferState === "running"}
-                    type="file"
-                    onChange={(event) => {
-                      void handleImportData(event.currentTarget.files);
-                      event.currentTarget.value = "";
-                    }}
-                  />
-                </label>
-              </div>
-              <p className={`data-transfer-message data-transfer-message--${dataTransferState}`}>{dataTransferMessage}</p>
-            </section>
+            <DataTransferPanel
+              onDataImported={async () => {
+                await loadCollections(selectedCollection?.id);
+                refreshSearchResults();
+              }}
+              onStatusMessage={setMessage}
+            />
             <button className="primary-action" type="submit">
               Salva impostazioni
             </button>
@@ -890,18 +952,55 @@ export function App() {
           <form className="modal modal--wide" onSubmit={handleCreateItem}>
             <div className="modal__header">
               <h2>Nuovo elemento</h2>
-              <button type="button" onClick={() => setItemModalOpen(false)} aria-label="Chiudi">
+              <button type="button" onClick={closeNewItemModal} aria-label="Chiudi">
                 x
               </button>
             </div>
-            <label>
-              Titolo
-              <input
-                value={itemForm.title}
-                onChange={(event) => setItemForm((current) => ({ ...current, title: event.target.value }))}
-                placeholder="Es. Dune"
-              />
-            </label>
+            <div className="field-grid">
+              <label>
+                Tipo item
+                <select value={itemType} onChange={(event) => setItemType(event.target.value)}>
+                  {itemTypeOptions.map((type) => (
+                    <option key={type} value={type}>
+                      {type}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Titolo
+                <AutocompleteSearch
+                  itemType={itemType || selectedCollection.type}
+                  value={itemForm.title ?? ""}
+                  onValueChange={(title) => setItemForm((current) => ({ ...current, title }))}
+                  onSelect={applyMetadataDetails}
+                  onStatusMessage={setMessage}
+                  placeholder="Es. Dune"
+                />
+              </label>
+            </div>
+            <div className="metadata-resolution-panel">
+              <span>Provider metadata</span>
+              {metadataResolutionState === "loading" && <strong>Risoluzione in corso...</strong>}
+              {metadataResolutionState === "error" && <strong>Resolver non disponibile</strong>}
+              {metadataResolutionState === "ready" && metadataResolution && (
+                <>
+                  <strong>{metadataResolution.manualEntryOnly ? "Inserimento manuale" : metadataResolution.macroCategory}</strong>
+                  {metadataResolution.providers.length > 0 && (
+                    <div className="metadata-provider-list">
+                      {metadataResolution.providers.map((provider) => (
+                        <span
+                          className={provider.isAvailable ? "is-available" : provider.isFuture ? "is-future" : "is-unavailable"}
+                          key={provider.providerId}
+                        >
+                          {provider.displayName}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
             <div className="field-grid">
               <label>
                 Stato

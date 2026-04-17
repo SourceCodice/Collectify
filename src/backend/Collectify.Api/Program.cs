@@ -39,6 +39,7 @@ builder.Services.AddSingleton<ItemImageApplicationService>();
 builder.Services.AddSingleton<IExternalMetadataProvider, TmdbMetadataProvider>();
 builder.Services.AddSingleton<IExternalMetadataProvider, RawgMetadataProvider>();
 builder.Services.AddSingleton<IExternalMetadataProvider, DiscogsMetadataProvider>();
+builder.Services.AddSingleton<MetadataProviderResolver>();
 builder.Services.AddSingleton<ExternalMetadataApplicationService>();
 builder.Services.AddSingleton<LocalSearchApplicationService>();
 builder.Services.AddSingleton<IUserProfileRepository, JsonUserProfileRepository>();

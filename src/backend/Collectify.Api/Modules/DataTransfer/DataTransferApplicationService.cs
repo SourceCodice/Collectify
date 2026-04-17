@@ -8,7 +8,8 @@ namespace Collectify.Api.Modules.DataTransfer;
 public sealed class DataTransferApplicationService(
     ICollectifyDataStore dataStore,
     LocalDataPathResolver pathResolver,
-    AppSettingsFileStore settingsStore)
+    AppSettingsFileStore settingsStore,
+    ILogger<DataTransferApplicationService> logger)
 {
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web)
     {
@@ -38,18 +39,23 @@ public sealed class DataTransferApplicationService(
             messages.Add("Nessun file JSON principale trovato per il backup.");
         }
 
+        logger.LogInformation("Created local data backup in {BackupDirectoryPath} with {FileCount} file(s).", backupDirectory, files.Count);
+
         return new DataBackupResponse(createdAt, backupDirectory, files, messages);
     }
 
     public async Task<CollectifyExportDocument> BuildExportAsync(CancellationToken cancellationToken)
     {
         var document = await dataStore.LoadAsync(cancellationToken);
+        var exportedAt = DateTimeOffset.UtcNow;
+
+        logger.LogInformation("Created Collectify export with {CollectionCount} collection(s).", document.Collections.Count);
 
         return new CollectifyExportDocument
         {
             Format = DataTransferConstants.ExportFormat,
             FormatVersion = DataTransferConstants.CurrentFormatVersion,
-            ExportedAt = DateTimeOffset.UtcNow,
+            ExportedAt = exportedAt,
             Data = document
         };
     }
@@ -80,7 +86,25 @@ public sealed class DataTransferApplicationService(
         }
 
         var importedData = exportDocument!.Data!;
-        var currentDocument = await dataStore.LoadAsync(cancellationToken);
+        var response = await dataStore.UpdateAsync(
+            currentDocument => DataStoreUpdate<DataImportResponse>.Changed(ImportIntoDocument(importedData, currentDocument)),
+            cancellationToken);
+
+        logger.LogInformation(
+            "Imported Collectify data: {CollectionCount} collection(s), {ItemCount} item(s).",
+            response.ImportedCollections,
+            response.ImportedItems);
+
+        return ValidationResult<DataImportResponse>.Success(response);
+    }
+
+    public static byte[] SerializeExport(CollectifyExportDocument exportDocument)
+    {
+        return JsonSerializer.SerializeToUtf8Bytes(exportDocument, SerializerOptions);
+    }
+
+    private static DataImportResponse ImportIntoDocument(CollectifyDataDocument importedData, CollectifyDataDocument currentDocument)
+    {
         var now = DateTimeOffset.UtcNow;
         var messages = new List<string>();
         var categoryIdMap = new Dictionary<Guid, Guid>();
@@ -166,61 +190,7 @@ public sealed class DataTransferApplicationService(
 
             foreach (var item in collection.Items)
             {
-                importedCollection.Items.Add(new Item
-                {
-                    Id = Guid.NewGuid(),
-                    CollectionId = collectionId,
-                    Title = item.Title.Trim(),
-                    Description = item.Description,
-                    Notes = item.Notes,
-                    Condition = string.IsNullOrWhiteSpace(item.Condition) ? "Non specificato" : item.Condition.Trim(),
-                    AcquiredAt = item.AcquiredAt,
-                    EstimatedValue = item.EstimatedValue,
-                    Currency = item.Currency,
-                    TagIds = item.TagIds
-                        .Select(tagId => tagIdMap.TryGetValue(tagId, out var mappedTagId) ? mappedTagId : (Guid?)null)
-                        .Where(mappedTagId => mappedTagId.HasValue)
-                        .Select(mappedTagId => mappedTagId!.Value)
-                        .Distinct()
-                        .ToList(),
-                    Attributes = item.Attributes.Select(attribute => new ItemAttribute
-                    {
-                        Id = Guid.NewGuid(),
-                        Key = attribute.Key.Trim(),
-                        Label = string.IsNullOrWhiteSpace(attribute.Label) ? attribute.Key.Trim() : attribute.Label.Trim(),
-                        Value = attribute.Value,
-                        ValueType = string.IsNullOrWhiteSpace(attribute.ValueType) ? "Text" : attribute.ValueType.Trim(),
-                        Unit = attribute.Unit,
-                        CreatedAt = now,
-                        UpdatedAt = now
-                    }).ToList(),
-                    Images = item.Images.Select(image => new ItemImage
-                    {
-                        Id = Guid.NewGuid(),
-                        FileName = image.FileName,
-                        RelativePath = image.RelativePath,
-                        ContentType = image.ContentType,
-                        SizeBytes = image.SizeBytes,
-                        Caption = image.Caption,
-                        IsPrimary = image.IsPrimary,
-                        CreatedAt = now,
-                        UpdatedAt = now
-                    }).ToList(),
-                    ExternalReferences = item.ExternalReferences.Select(reference => new ExternalReference
-                    {
-                        Id = Guid.NewGuid(),
-                        Provider = reference.Provider.Trim(),
-                        ExternalId = reference.ExternalId,
-                        Url = reference.Url,
-                        Metadata = reference.Metadata is null
-                            ? []
-                            : new Dictionary<string, string>(reference.Metadata, StringComparer.OrdinalIgnoreCase),
-                        CreatedAt = now,
-                        UpdatedAt = now
-                    }).ToList(),
-                    CreatedAt = now,
-                    UpdatedAt = now
-                });
+                importedCollection.Items.Add(CloneImportedItem(item, collectionId, tagIdMap, now));
                 importedItems++;
             }
 
@@ -228,26 +198,82 @@ public sealed class DataTransferApplicationService(
             importedCollections++;
         }
 
-        await dataStore.SaveAsync(currentDocument, cancellationToken);
-
         messages.Add("Import completato senza sovrascrivere le collezioni esistenti.");
         if (importedData.Collections.Any(collection => collection.Items.Any(item => item.Images.Count > 0)))
         {
             messages.Add("Il file JSON mantiene i riferimenti alle immagini locali; assicurati che i file immagine esistano nella cartella dati corrente.");
         }
 
-        return ValidationResult<DataImportResponse>.Success(new DataImportResponse(
+        return new DataImportResponse(
             importedCollections,
             importedItems,
             importedCategories,
             importedTags,
             now,
-            messages));
+            messages);
     }
 
-    public static byte[] SerializeExport(CollectifyExportDocument exportDocument)
+    private static Item CloneImportedItem(
+        Item item,
+        Guid collectionId,
+        IReadOnlyDictionary<Guid, Guid> tagIdMap,
+        DateTimeOffset now)
     {
-        return JsonSerializer.SerializeToUtf8Bytes(exportDocument, SerializerOptions);
+        return new Item
+        {
+            Id = Guid.NewGuid(),
+            CollectionId = collectionId,
+            Title = item.Title.Trim(),
+            Description = item.Description,
+            Notes = item.Notes,
+            Condition = string.IsNullOrWhiteSpace(item.Condition) ? "Non specificato" : item.Condition.Trim(),
+            AcquiredAt = item.AcquiredAt,
+            EstimatedValue = item.EstimatedValue,
+            Currency = item.Currency,
+            TagIds = item.TagIds
+                .Select(tagId => tagIdMap.TryGetValue(tagId, out var mappedTagId) ? mappedTagId : (Guid?)null)
+                .Where(mappedTagId => mappedTagId.HasValue)
+                .Select(mappedTagId => mappedTagId!.Value)
+                .Distinct()
+                .ToList(),
+            Attributes = item.Attributes.Select(attribute => new ItemAttribute
+            {
+                Id = Guid.NewGuid(),
+                Key = attribute.Key.Trim(),
+                Label = string.IsNullOrWhiteSpace(attribute.Label) ? attribute.Key.Trim() : attribute.Label.Trim(),
+                Value = attribute.Value,
+                ValueType = string.IsNullOrWhiteSpace(attribute.ValueType) ? "Text" : attribute.ValueType.Trim(),
+                Unit = attribute.Unit,
+                CreatedAt = now,
+                UpdatedAt = now
+            }).ToList(),
+            Images = item.Images.Select(image => new ItemImage
+            {
+                Id = Guid.NewGuid(),
+                FileName = image.FileName,
+                RelativePath = image.RelativePath,
+                ContentType = image.ContentType,
+                SizeBytes = image.SizeBytes,
+                Caption = image.Caption,
+                IsPrimary = image.IsPrimary,
+                CreatedAt = now,
+                UpdatedAt = now
+            }).ToList(),
+            ExternalReferences = item.ExternalReferences.Select(reference => new ExternalReference
+            {
+                Id = Guid.NewGuid(),
+                Provider = reference.Provider.Trim(),
+                ExternalId = reference.ExternalId,
+                Url = reference.Url,
+                Metadata = reference.Metadata is null
+                    ? []
+                    : new Dictionary<string, string>(reference.Metadata, StringComparer.OrdinalIgnoreCase),
+                CreatedAt = now,
+                UpdatedAt = now
+            }).ToList(),
+            CreatedAt = now,
+            UpdatedAt = now
+        };
     }
 
     private static void AddBackupFile(

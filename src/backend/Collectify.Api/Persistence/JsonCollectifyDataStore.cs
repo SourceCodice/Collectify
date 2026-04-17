@@ -19,48 +19,7 @@ public sealed class JsonCollectifyDataStore(
 
         try
         {
-            var paths = pathResolver.Resolve();
-            Directory.CreateDirectory(paths.RootPath);
-            Directory.CreateDirectory(paths.ImagesPath);
-            Directory.CreateDirectory(paths.BackupsPath);
-
-            if (!File.Exists(paths.DataFilePath))
-            {
-                var initialDocument = CollectifySeedData.Create();
-                await WriteAtomicAsync(paths.DataFilePath, initialDocument, cancellationToken);
-                return initialDocument;
-            }
-
-            try
-            {
-                await using var stream = File.Open(paths.DataFilePath, FileMode.Open, FileAccess.Read, FileShare.Read);
-                var document = await JsonSerializer.DeserializeAsync<CollectifyDataDocument>(
-                    stream,
-                    SerializerOptions,
-                    cancellationToken);
-
-                if (document is null)
-                {
-                    throw new JsonException("Collectify data file is empty.");
-                }
-
-                Normalize(document);
-                return document;
-            }
-            catch (Exception exception) when (exception is JsonException or NotSupportedException)
-            {
-                var corruptPath = BuildCorruptFilePath(paths.DataFilePath);
-                File.Move(paths.DataFilePath, corruptPath);
-
-                logger.LogWarning(
-                    exception,
-                    "Collectify data file was corrupted and moved to {CorruptPath}. A new file will be created.",
-                    corruptPath);
-
-                var replacementDocument = CollectifySeedData.Create();
-                await WriteAtomicAsync(paths.DataFilePath, replacementDocument, cancellationToken);
-                return replacementDocument;
-            }
+            return await LoadCoreAsync(cancellationToken);
         }
         finally
         {
@@ -74,25 +33,100 @@ public sealed class JsonCollectifyDataStore(
 
         try
         {
-            var paths = pathResolver.Resolve();
-            Directory.CreateDirectory(paths.RootPath);
-            Directory.CreateDirectory(paths.ImagesPath);
-            Directory.CreateDirectory(paths.BackupsPath);
-
-            document.UpdatedAt = DateTimeOffset.UtcNow;
-            Normalize(document);
-
-            if (paths.AutomaticBackupEnabled)
-            {
-                CreateAutomaticBackup(paths.DataFilePath, paths.BackupsPath);
-            }
-
-            await WriteAtomicAsync(paths.DataFilePath, document, cancellationToken);
+            await SaveCoreAsync(document, cancellationToken);
         }
         finally
         {
             _lock.Release();
         }
+    }
+
+    public async Task<TResult> UpdateAsync<TResult>(
+        Func<CollectifyDataDocument, DataStoreUpdate<TResult>> update,
+        CancellationToken cancellationToken)
+    {
+        await _lock.WaitAsync(cancellationToken);
+
+        try
+        {
+            var document = await LoadCoreAsync(cancellationToken);
+            var result = update(document);
+
+            if (result.HasChanges)
+            {
+                await SaveCoreAsync(document, cancellationToken);
+            }
+
+            return result.Value;
+        }
+        finally
+        {
+            _lock.Release();
+        }
+    }
+
+    private async Task<CollectifyDataDocument> LoadCoreAsync(CancellationToken cancellationToken)
+    {
+        var paths = pathResolver.Resolve();
+        Directory.CreateDirectory(paths.RootPath);
+        Directory.CreateDirectory(paths.ImagesPath);
+        Directory.CreateDirectory(paths.BackupsPath);
+
+        if (!File.Exists(paths.DataFilePath))
+        {
+            var initialDocument = CollectifySeedData.Create();
+            await WriteAtomicAsync(paths.DataFilePath, initialDocument, cancellationToken);
+            return initialDocument;
+        }
+
+        try
+        {
+            await using var stream = File.Open(paths.DataFilePath, FileMode.Open, FileAccess.Read, FileShare.Read);
+            var document = await JsonSerializer.DeserializeAsync<CollectifyDataDocument>(
+                stream,
+                SerializerOptions,
+                cancellationToken);
+
+            if (document is null)
+            {
+                throw new JsonException("Collectify data file is empty.");
+            }
+
+            Normalize(document);
+            return document;
+        }
+        catch (Exception exception) when (exception is JsonException or NotSupportedException)
+        {
+            var corruptPath = BuildCorruptFilePath(paths.DataFilePath);
+            File.Move(paths.DataFilePath, corruptPath);
+
+            logger.LogWarning(
+                exception,
+                "Collectify data file was corrupted and moved to {CorruptPath}. A new file will be created.",
+                corruptPath);
+
+            var replacementDocument = CollectifySeedData.Create();
+            await WriteAtomicAsync(paths.DataFilePath, replacementDocument, cancellationToken);
+            return replacementDocument;
+        }
+    }
+
+    private async Task SaveCoreAsync(CollectifyDataDocument document, CancellationToken cancellationToken)
+    {
+        var paths = pathResolver.Resolve();
+        Directory.CreateDirectory(paths.RootPath);
+        Directory.CreateDirectory(paths.ImagesPath);
+        Directory.CreateDirectory(paths.BackupsPath);
+
+        document.UpdatedAt = DateTimeOffset.UtcNow;
+        Normalize(document);
+
+        if (paths.AutomaticBackupEnabled)
+        {
+            CreateAutomaticBackup(paths.DataFilePath, paths.BackupsPath);
+        }
+
+        await WriteAtomicAsync(paths.DataFilePath, document, cancellationToken);
     }
 
     private static void CreateAutomaticBackup(string dataFilePath, string backupsPath)

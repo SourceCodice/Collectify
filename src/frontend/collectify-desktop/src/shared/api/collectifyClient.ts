@@ -9,10 +9,13 @@ import type {
 import type { DataBackupResponse, DataImportResponse } from "../../features/dataTransfer/types";
 import type {
   ExternalMetadataDetails,
-  ExternalMetadataKind,
+  ExternalMetadataProviderKind,
   ExternalMetadataSearchResult,
   ImportExternalItemPayload,
-  ImportedExternalItem
+  ImportedExternalItem,
+  LiveMetadataDetails,
+  LiveMetadataSearchResult,
+  MetadataProviderResolution
 } from "../../features/externalMetadata/types";
 import type { LocalSearchQuery, LocalSearchResponse } from "../../features/search/types";
 import type { AppSettings, UpdateAppSettingsPayload } from "../../features/settings/types";
@@ -140,7 +143,7 @@ function buildImageFormData(file: File, options?: { caption?: string; isPrimary?
   return formData;
 }
 
-function externalMetadataPath(kind: ExternalMetadataKind) {
+function externalMetadataPath(kind: ExternalMetadataProviderKind) {
   return kind === "movie" ? "movies" : kind === "game" ? "games" : "albums";
 }
 
@@ -193,11 +196,29 @@ export const collectifyClient = {
     requestNoContent(`/api/collections/${collectionId}/items/${itemId}/images/${imageId}`, {
       method: "DELETE"
     }),
-  searchExternalMetadata: (kind: ExternalMetadataKind, query: string) =>
+  resolveExternalMetadataProviders: (itemTypeOrMacroCategory: string) =>
+    request<MetadataProviderResolution>(
+      `/api/external/providers?itemType=${encodeURIComponent(itemTypeOrMacroCategory)}`
+    ),
+  searchExternalMetadataForCategory: (macroCategory: string, query: string) =>
+    request<ExternalMetadataSearchResult[]>(
+      `/api/external/search?macroCategory=${encodeURIComponent(macroCategory)}&query=${encodeURIComponent(query)}`
+    ),
+  searchLiveExternalMetadata: (itemType: string, query: string, signal?: AbortSignal) =>
+    request<LiveMetadataSearchResult[]>(
+      `/api/external/live/search?itemType=${encodeURIComponent(itemType)}&query=${encodeURIComponent(query)}`,
+      { signal }
+    ),
+  getLiveExternalMetadataDetails: (itemType: string, provider: string, externalId: string, signal?: AbortSignal) =>
+    request<LiveMetadataDetails>(
+      `/api/external/live/details?itemType=${encodeURIComponent(itemType)}&provider=${encodeURIComponent(provider)}&externalId=${encodeURIComponent(externalId)}`,
+      { signal }
+    ),
+  searchExternalMetadata: (kind: ExternalMetadataProviderKind, query: string) =>
     request<ExternalMetadataSearchResult[]>(
       `/api/external/${externalMetadataPath(kind)}/search?query=${encodeURIComponent(query)}`
     ),
-  getExternalMetadataDetails: (kind: ExternalMetadataKind, externalId: string) =>
+  getExternalMetadataDetails: (kind: ExternalMetadataProviderKind, externalId: string) =>
     request<ExternalMetadataDetails>(
       `/api/external/${externalMetadataPath(kind)}/${encodeURIComponent(externalId)}`
     ),
