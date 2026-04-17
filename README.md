@@ -48,9 +48,7 @@ Collectify e' nelle prime fasi di sviluppo. La versione attuale introduce le bas
 - Backup locale.
 - Statistiche sulle collezioni.
 
-## Licenza
-
-Third-Party APIs
+## Third-Party APIs
 
 Collectify integrates with external services to enrich item data.
 
