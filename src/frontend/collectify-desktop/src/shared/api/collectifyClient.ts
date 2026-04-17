@@ -208,9 +208,9 @@ export const collectifyClient = {
     request<ExternalMetadataSearchResult[]>(
       `/api/external/search?macroCategory=${encodeURIComponent(macroCategory)}&query=${encodeURIComponent(query)}`
     ),
-  searchLiveExternalMetadata: (itemType: string, query: string, signal?: AbortSignal) =>
+  searchLiveExternalMetadata: (itemType: string, query: string, providerId?: string, signal?: AbortSignal) =>
     request<LiveMetadataSearchResult[]>(
-      `/api/external/live/search?itemType=${encodeURIComponent(itemType)}&query=${encodeURIComponent(query)}`,
+      `/api/external/live/search?itemType=${encodeURIComponent(itemType)}&query=${encodeURIComponent(query)}${providerId ? `&provider=${encodeURIComponent(providerId)}` : ""}`,
       { signal }
     ),
   getLiveExternalMetadataDetails: (itemType: string, provider: string, externalId: string, signal?: AbortSignal) =>

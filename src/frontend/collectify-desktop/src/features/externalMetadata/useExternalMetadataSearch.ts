@@ -7,7 +7,7 @@ export type LiveMetadataSearchState = "idle" | "loading" | "ready" | "error";
 const minimumQueryLength = 3;
 const debounceDelayMs = 320;
 
-export function useExternalMetadataSearch(itemType: string, query: string, enabled = true) {
+export function useExternalMetadataSearch(itemType: string, query: string, providerId?: string, enabled = true) {
   const [results, setResults] = useState<LiveMetadataSearchResult[]>([]);
   const [status, setStatus] = useState<LiveMetadataSearchState>("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -36,6 +36,7 @@ export function useExternalMetadataSearch(itemType: string, query: string, enabl
         const response = await collectifyClient.searchLiveExternalMetadata(
           normalizedItemType,
           normalizedQuery,
+          providerId,
           controller.signal
         );
 
@@ -58,7 +59,7 @@ export function useExternalMetadataSearch(itemType: string, query: string, enabl
       window.clearTimeout(timeoutId);
       controller.abort();
     };
-  }, [enabled, itemType, query]);
+  }, [enabled, itemType, providerId, query]);
 
   return {
     results,

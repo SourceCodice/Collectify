@@ -45,6 +45,7 @@ public sealed class ExternalMetadataApplicationService(
     public async Task<IReadOnlyList<LiveMetadataSearchResultResponse>> SearchLiveAsync(
         string itemTypeOrMacroCategory,
         string query,
+        string? providerId,
         CancellationToken cancellationToken)
     {
         if (query.Trim().Length < 2)
@@ -54,7 +55,9 @@ public sealed class ExternalMetadataApplicationService(
 
         var resolution = providerResolver.Resolve(itemTypeOrMacroCategory);
         var capabilitiesByProvider = resolution.Providers.ToDictionary(provider => provider.ProviderId, StringComparer.OrdinalIgnoreCase);
-        var resolvedProviders = providerResolver.ResolveAvailableProviders(itemTypeOrMacroCategory);
+        var resolvedProviders = string.IsNullOrWhiteSpace(providerId)
+            ? providerResolver.ResolveAvailableProviders(itemTypeOrMacroCategory)
+            : ResolveSelectedProvider(itemTypeOrMacroCategory, providerId);
 
         if (resolvedProviders.Count == 0)
         {
@@ -73,6 +76,12 @@ public sealed class ExternalMetadataApplicationService(
         }
 
         return results;
+    }
+
+    private IReadOnlyList<IExternalMetadataProvider> ResolveSelectedProvider(string itemTypeOrMacroCategory, string providerId)
+    {
+        var provider = providerResolver.ResolveAvailableProvider(itemTypeOrMacroCategory, providerId);
+        return provider is null ? [] : [provider];
     }
 
     public async Task<LiveMetadataDetailsResponse?> GetLiveDetailsAsync(

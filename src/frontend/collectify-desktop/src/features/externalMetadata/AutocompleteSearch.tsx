@@ -5,6 +5,7 @@ import { useExternalMetadataSearch } from "./useExternalMetadataSearch";
 
 type AutocompleteSearchProps = {
   itemType: string;
+  providerId?: string;
   value: string;
   disabled?: boolean;
   placeholder?: string;
@@ -15,6 +16,7 @@ type AutocompleteSearchProps = {
 
 export function AutocompleteSearch({
   itemType,
+  providerId,
   value,
   disabled = false,
   placeholder = "Cerca nei metadati esterni",
@@ -25,7 +27,7 @@ export function AutocompleteSearch({
   const [detailsLoadingId, setDetailsLoadingId] = useState<string | null>(null);
   const [detailsError, setDetailsError] = useState<string | null>(null);
   const detailsController = useRef<AbortController | null>(null);
-  const search = useExternalMetadataSearch(itemType, value, !disabled);
+  const search = useExternalMetadataSearch(itemType, value, providerId, !disabled);
 
   useEffect(() => {
     return () => {

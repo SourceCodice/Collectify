@@ -24,8 +24,8 @@ public static class ExternalMetadataEndpoints
         group.MapGet("/search", (string query, string? itemType, string? macroCategory, ExternalMetadataApplicationService service, CancellationToken cancellationToken) =>
             ExecuteAsync(() => SearchByCategoryAsync(ResolveRequestedCategory(itemType, macroCategory), query, service, cancellationToken)));
 
-        group.MapGet("/live/search", (string query, string? itemType, string? macroCategory, ExternalMetadataApplicationService service, CancellationToken cancellationToken) =>
-            ExecuteAsync(() => SearchLiveAsync(ResolveRequestedCategory(itemType, macroCategory), query, service, cancellationToken)));
+        group.MapGet("/live/search", (string query, string? itemType, string? macroCategory, string? provider, ExternalMetadataApplicationService service, CancellationToken cancellationToken) =>
+            ExecuteAsync(() => SearchLiveAsync(ResolveRequestedCategory(itemType, macroCategory), query, provider, service, cancellationToken)));
 
         group.MapGet("/live/details", (string provider, string externalId, string? itemType, string? macroCategory, ExternalMetadataApplicationService service, CancellationToken cancellationToken) =>
             ExecuteAsync(() => LiveDetailsAsync(ResolveRequestedCategory(itemType, macroCategory), provider, externalId, service, cancellationToken)));
@@ -108,6 +108,7 @@ public static class ExternalMetadataEndpoints
     private static async Task<IResult> SearchLiveAsync(
         string? category,
         string query,
+        string? provider,
         ExternalMetadataApplicationService service,
         CancellationToken cancellationToken)
     {
@@ -128,7 +129,7 @@ public static class ExternalMetadataEndpoints
             return Results.ValidationProblem(errors);
         }
 
-        return Results.Ok(await service.SearchLiveAsync(category!, query, cancellationToken));
+        return Results.Ok(await service.SearchLiveAsync(category!, query, provider, cancellationToken));
     }
 
     private static async Task<IResult> LiveDetailsAsync(
