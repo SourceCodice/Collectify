@@ -1,5 +1,32 @@
 :root {
   color-scheme: dark;
+  --color-bg: #080a0d;
+  --color-app: #111419;
+  --color-sidebar: #0d1015;
+  --color-sidebar-rail: #090b0f;
+  --color-surface: #171b21;
+  --color-surface-raised: #1d222a;
+  --color-surface-hover: #252b34;
+  --color-surface-pressed: #2d343f;
+  --color-input: #0f1217;
+  --color-border: #2b323c;
+  --color-border-strong: #3b4552;
+  --color-text: #f5f7fa;
+  --color-text-muted: #aeb7c2;
+  --color-text-soft: #7f8a97;
+  --color-accent: #ccff00;
+  --color-accent-hover: #d7ff33;
+  --color-accent-pressed: #b7e600;
+  --color-accent-muted: rgba(204, 255, 0, 0.13);
+  --color-accent-border: rgba(204, 255, 0, 0.36);
+  --color-danger: #ff5c67;
+  --color-danger-muted: rgba(255, 92, 103, 0.14);
+  --color-warning: #ffcc66;
+  --color-success: #39d98a;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --shadow-panel: 0 18px 44px rgba(0, 0, 0, 0.28);
+  --shadow-modal: 0 28px 86px rgba(0, 0, 0, 0.5);
   font-family:
     Inter,
     ui-sans-serif,
@@ -17,10 +44,11 @@
 }
 
 html {
-  background: #111214;
+  background: var(--color-bg);
 }
 
 body {
+  background: var(--color-bg);
   margin: 0;
   min-width: 320px;
 }
@@ -43,6 +71,11 @@ button:focus-visible,
 input:focus-visible,
 select:focus-visible,
 textarea:focus-visible {
-  outline: 3px solid #5865f2;
+  outline: 3px solid var(--color-accent);
   outline-offset: 2px;
+}
+
+::selection {
+  background: var(--color-accent-muted);
+  color: var(--color-text);
 }

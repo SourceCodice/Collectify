@@ -92,3 +92,15 @@ PUT /api/settings
 ```
 
 Da qui si possono aggiornare cartella dati, tema, backup automatico e lingua futura.
+
+## Backup, export e import
+
+Gli endpoint locali per la portabilita' dati sono:
+
+```text
+POST /api/data/backup
+GET /api/data/export
+POST /api/data/import
+```
+
+`/api/data/export` restituisce un file JSON unico con formato `collectify-export` e `formatVersion`. `/api/data/import` accetta `multipart/form-data` con campo `file` e aggiunge i dati importati senza sovrascrivere quelli esistenti.

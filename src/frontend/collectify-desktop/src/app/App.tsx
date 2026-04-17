@@ -15,6 +15,7 @@ import "./App.css";
 type LoadState = "idle" | "loading" | "ready" | "error";
 type SearchState = "idle" | "loading" | "ready" | "error";
 type SettingsState = "idle" | "loading" | "ready" | "error";
+type DataTransferState = "idle" | "running" | "success" | "error";
 
 type AttributeDraft = {
   key: string;
@@ -117,6 +118,8 @@ export function App() {
   const [settingsState, setSettingsState] = useState<SettingsState>("idle");
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [settingsForm, setSettingsForm] = useState<UpdateAppSettingsPayload>(emptySettingsForm);
+  const [dataTransferState, setDataTransferState] = useState<DataTransferState>("idle");
+  const [dataTransferMessage, setDataTransferMessage] = useState("Backup, export e import lavorano solo sui file JSON locali.");
 
   async function loadCollections(preferredCollectionId?: string) {
     setLoadState("loading");
@@ -291,6 +294,70 @@ export function App() {
       setMessage("Impostazioni salvate.");
     } catch {
       setMessage("Salvataggio impostazioni non riuscito.");
+    }
+  }
+
+  async function handleCreateBackup() {
+    setDataTransferState("running");
+    setDataTransferMessage("Creazione backup in corso...");
+
+    try {
+      const result = await collectifyClient.createBackup();
+      setDataTransferState("success");
+      setDataTransferMessage(
+        result.files.length > 0
+          ? `Backup creato con ${result.files.length} file in ${result.backupDirectoryPath}.`
+          : result.messages.join(" ") || "Backup completato, ma non sono stati copiati file."
+      );
+      setMessage("Backup locale creato.");
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Backup non riuscito.";
+      setDataTransferState("error");
+      setDataTransferMessage(errorMessage);
+      setMessage(errorMessage);
+    }
+  }
+
+  async function handleExportData() {
+    setDataTransferState("running");
+    setDataTransferMessage("Preparazione export JSON...");
+
+    try {
+      const fileName = await collectifyClient.exportData();
+      setDataTransferState("success");
+      setDataTransferMessage(`Export creato: ${fileName}.`);
+      setMessage("Export JSON pronto.");
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Export non riuscito.";
+      setDataTransferState("error");
+      setDataTransferMessage(errorMessage);
+      setMessage(errorMessage);
+    }
+  }
+
+  async function handleImportData(files: FileList | null) {
+    const file = files?.[0];
+    if (!file) {
+      return;
+    }
+
+    setDataTransferState("running");
+    setDataTransferMessage("Validazione e import del file JSON...");
+
+    try {
+      const result = await collectifyClient.importData(file);
+      await loadCollections(selectedCollection?.id);
+      refreshSearchResults();
+      setDataTransferState("success");
+      setDataTransferMessage(
+        `Import completato: ${result.importedCollections} collezioni e ${result.importedItems} elementi aggiunti. ${result.messages.join(" ")}`
+      );
+      setMessage("Import JSON completato.");
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Import non riuscito.";
+      setDataTransferState("error");
+      setDataTransferMessage(errorMessage);
+      setMessage(errorMessage);
     }
   }
 
@@ -772,6 +839,45 @@ export function App() {
                 <strong>{settings?.backupsPath ?? "Non disponibile"}</strong>
               </div>
             </div>
+            <section className="data-transfer-panel" aria-label="Backup export import">
+              <div className="data-transfer-panel__header">
+                <div>
+                  <span>Portabilita' dati</span>
+                  <strong>Backup, export e import JSON</strong>
+                </div>
+              </div>
+              <div className="data-transfer-actions">
+                <button
+                  className="secondary-action"
+                  disabled={dataTransferState === "running"}
+                  type="button"
+                  onClick={() => void handleCreateBackup()}
+                >
+                  Crea backup
+                </button>
+                <button
+                  className="secondary-action"
+                  disabled={dataTransferState === "running"}
+                  type="button"
+                  onClick={() => void handleExportData()}
+                >
+                  Esporta JSON
+                </button>
+                <label className={dataTransferState === "running" ? "import-action is-disabled" : "import-action"}>
+                  Importa JSON
+                  <input
+                    accept="application/json,.json"
+                    disabled={dataTransferState === "running"}
+                    type="file"
+                    onChange={(event) => {
+                      void handleImportData(event.currentTarget.files);
+                      event.currentTarget.value = "";
+                    }}
+                  />
+                </label>
+              </div>
+              <p className={`data-transfer-message data-transfer-message--${dataTransferState}`}>{dataTransferMessage}</p>
+            </section>
             <button className="primary-action" type="submit">
               Salva impostazioni
             </button>

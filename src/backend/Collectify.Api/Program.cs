@@ -1,5 +1,6 @@
 using Collectify.Api.DevTools;
 using Collectify.Api.Modules.Collections;
+using Collectify.Api.Modules.DataTransfer;
 using Collectify.Api.Modules.ExternalMetadata;
 using Collectify.Api.Modules.Search;
 using Collectify.Api.Modules.Settings;
@@ -15,7 +16,8 @@ builder.Services.AddCors(options =>
         policy
             .WithOrigins(builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? ["http://localhost:5173", "http://127.0.0.1:5173"])
             .AllowAnyHeader()
-            .AllowAnyMethod();
+            .AllowAnyMethod()
+            .WithExposedHeaders("Content-Disposition");
     });
 });
 
@@ -29,6 +31,7 @@ builder.Services.AddHttpClient("ExternalMetadata", client =>
 builder.Services.AddSingleton<LocalDataPathResolver>();
 builder.Services.AddSingleton<AppSettingsFileStore>();
 builder.Services.AddSingleton<AppSettingsApplicationService>();
+builder.Services.AddSingleton<DataTransferApplicationService>();
 builder.Services.AddSingleton<ICollectifyDataStore, JsonCollectifyDataStore>();
 builder.Services.AddSingleton<ICollectionRepository, JsonCollectionRepository>();
 builder.Services.AddSingleton<CollectionApplicationService>();
@@ -70,6 +73,7 @@ app.MapAssetEndpoints();
 app.MapExternalMetadataEndpoints();
 app.MapSearchEndpoints();
 app.MapSettingsEndpoints();
+app.MapDataTransferEndpoints();
 
 app.Run();
 

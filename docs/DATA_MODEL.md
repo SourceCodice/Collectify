@@ -113,6 +113,27 @@ I filtri lavorano sui dati gia' presenti nel JSON: categoria della collezione, t
 
 `settings.json` contiene percorso cartella dati, tema, stato del backup automatico e lingua. All'avvio l'app crea automaticamente cartella dati, cartella immagini e cartella backup quando necessarie.
 
+## Backup, Export e Import
+
+Il backup manuale copia i file JSON principali in una sottocartella dedicata di `backups/`:
+
+```text
+backups/manual-yyyyMMddHHmmssfff-<guid>/
+```
+
+L'export produce un singolo JSON leggibile e versionato:
+
+```json
+{
+  "format": "collectify-export",
+  "formatVersion": 1,
+  "exportedAt": "2026-04-17T10:00:00Z",
+  "data": {}
+}
+```
+
+L'import valida formato, versione e campi minimi. I dati importati vengono aggiunti con nuovi identificatori, quindi le collezioni gia' presenti non vengono sovrascritte. Se una categoria o un tag esiste gia' con lo stesso nome, viene riusato.
+
 ## File Mancante
 
 Se il file JSON non esiste, viene creato un documento iniziale con dati seed minimi.

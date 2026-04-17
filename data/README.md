@@ -14,7 +14,8 @@ data/
     collectify-data.json.corrupt-*# copie preservate in caso di JSON corrotto
     assets/
       images/                     # immagini locali degli item
-    backups/                      # backup automatici quando abilitati
+    backups/                      # backup automatici e manuali
+      manual-*/                   # copie JSON create dalla UI
 ```
 
 In produzione il percorso predefinito e' la cartella applicativa locale dell'utente.

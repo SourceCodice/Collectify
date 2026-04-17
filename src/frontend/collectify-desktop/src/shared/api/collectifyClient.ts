@@ -6,6 +6,7 @@ import type {
   CreateCollectionPayload,
   CreateItemPayload
 } from "../../features/collections/types";
+import type { DataBackupResponse, DataImportResponse } from "../../features/dataTransfer/types";
 import type {
   ExternalMetadataDetails,
   ExternalMetadataKind,
@@ -18,6 +19,25 @@ import type { AppSettings, UpdateAppSettingsPayload } from "../../features/setti
 
 const apiBaseUrl = import.meta.env.VITE_COLLECTIFY_API_URL ?? "http://localhost:5088";
 
+async function readErrorMessage(response: Response) {
+  try {
+    const problem = await response.json();
+    const validationErrors = problem?.errors
+      ? Object.values(problem.errors)
+          .flat()
+          .filter(Boolean)
+      : [];
+
+    if (validationErrors.length > 0) {
+      return validationErrors.join(" ");
+    }
+
+    return problem?.detail || problem?.title || `Collectify API returned ${response.status}`;
+  } catch {
+    return `Collectify API returned ${response.status}`;
+  }
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${apiBaseUrl}${path}`, {
     headers: {
@@ -28,7 +48,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   });
 
   if (!response.ok) {
-    throw new Error(`Collectify API returned ${response.status}`);
+    throw new Error(await readErrorMessage(response));
   }
 
   return response.json() as Promise<T>;
@@ -41,7 +61,7 @@ async function uploadImage<T>(path: string, formData: FormData, method: "POST" |
   });
 
   if (!response.ok) {
-    throw new Error(`Collectify API returned ${response.status}`);
+    throw new Error(await readErrorMessage(response));
   }
 
   return response.json() as Promise<T>;
@@ -51,8 +71,58 @@ async function requestNoContent(path: string, init?: RequestInit): Promise<void>
   const response = await fetch(`${apiBaseUrl}${path}`, init);
 
   if (!response.ok) {
-    throw new Error(`Collectify API returned ${response.status}`);
+    throw new Error(await readErrorMessage(response));
   }
+}
+
+async function uploadDataImport(path: string, file: File): Promise<DataImportResponse> {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const response = await fetch(`${apiBaseUrl}${path}`, {
+    method: "POST",
+    body: formData
+  });
+
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response));
+  }
+
+  return response.json() as Promise<DataImportResponse>;
+}
+
+async function downloadExportFile(path: string): Promise<string> {
+  const response = await fetch(`${apiBaseUrl}${path}`);
+
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response));
+  }
+
+  const blob = await response.blob();
+  const objectUrl = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = objectUrl;
+  anchor.download = readFileName(response.headers.get("Content-Disposition")) ?? "collectify-export.json";
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(objectUrl);
+
+  return anchor.download;
+}
+
+function readFileName(contentDisposition: string | null) {
+  if (!contentDisposition) {
+    return null;
+  }
+
+  const encodedMatch = contentDisposition.match(/filename\*=UTF-8''([^;]+)/i);
+  if (encodedMatch?.[1]) {
+    return decodeURIComponent(encodedMatch[1].replace(/"/g, ""));
+  }
+
+  const plainMatch = contentDisposition.match(/filename="?([^";]+)"?/i);
+  return plainMatch?.[1] ?? null;
 }
 
 function buildImageFormData(file: File, options?: { caption?: string; isPrimary?: boolean }) {
@@ -145,5 +215,11 @@ export const collectifyClient = {
     request<AppSettings>("/api/settings", {
       method: "PUT",
       body: JSON.stringify(payload)
-    })
+    }),
+  createBackup: () =>
+    request<DataBackupResponse>("/api/data/backup", {
+      method: "POST"
+    }),
+  exportData: () => downloadExportFile("/api/data/export"),
+  importData: (file: File) => uploadDataImport("/api/data/import", file)
 };
