@@ -6,6 +6,7 @@ public static class ExternalMetadataKinds
     public const string TvShow = "show";
     public const string Game = "game";
     public const string Album = "album";
+    public const string Single = "single";
     public const string Book = "book";
     public const string Manual = "manual";
 }

@@ -114,9 +114,11 @@ public sealed class MetadataProviderResolver(
             "musicbrainz" => true,
             "itunes-movies" => true,
             "itunes-albums" => true,
+            "itunes-singles" => true,
             "itunes-books" => true,
             "tvmaze" => true,
             "steam" => true,
+            "musicbrainz-singles" => true,
             _ => false
         };
     }

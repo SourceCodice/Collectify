@@ -23,7 +23,7 @@ export const collectionTypeLabels: Record<string, string> = {
 export const itemTypeOptionsByCollectionType: Record<string, string[]> = {
   Movies: ["Blu-ray", "DVD", "4K UHD", "Digitale"],
   Videogames: ["Videogioco", "Collector edition", "DLC"],
-  Music: ["Vinile", "CD", "Album digitale"],
+  Music: ["Vinile", "CD", "Album digitale", "Singolo"],
   Books: ["Libro", "Fumetto", "Manga"],
   Cars: ["Auto"],
   Plants: ["Pianta"],

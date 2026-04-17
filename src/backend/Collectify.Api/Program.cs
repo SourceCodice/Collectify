@@ -41,8 +41,10 @@ builder.Services.AddSingleton<IExternalMetadataProvider, RawgMetadataProvider>()
 builder.Services.AddSingleton<IExternalMetadataProvider, DiscogsMetadataProvider>();
 builder.Services.AddSingleton<IExternalMetadataProvider, OpenLibraryMetadataProvider>();
 builder.Services.AddSingleton<IExternalMetadataProvider, MusicBrainzMetadataProvider>();
+builder.Services.AddSingleton<IExternalMetadataProvider, MusicBrainzSingleMetadataProvider>();
 builder.Services.AddSingleton<IExternalMetadataProvider, ItunesMovieMetadataProvider>();
 builder.Services.AddSingleton<IExternalMetadataProvider, ItunesAlbumMetadataProvider>();
+builder.Services.AddSingleton<IExternalMetadataProvider, ItunesSingleMetadataProvider>();
 builder.Services.AddSingleton<IExternalMetadataProvider, ItunesBookMetadataProvider>();
 builder.Services.AddSingleton<IExternalMetadataProvider, TvmazeMetadataProvider>();
 builder.Services.AddSingleton<IExternalMetadataProvider, SteamMetadataProvider>();

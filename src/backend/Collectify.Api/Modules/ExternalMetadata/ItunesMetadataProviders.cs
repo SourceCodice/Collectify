@@ -21,6 +21,15 @@ public sealed class ItunesAlbumMetadataProvider(IHttpClientFactory httpClientFac
     protected override string Entity => "album";
 }
 
+public sealed class ItunesSingleMetadataProvider(IHttpClientFactory httpClientFactory, IOptions<ExternalMetadataOptions> options)
+    : ItunesMetadataProviderBase(httpClientFactory, options)
+{
+    public override string ProviderId => "itunes-singles";
+    public override string SupportedKind => ExternalMetadataKinds.Single;
+    protected override string Media => "music";
+    protected override string Entity => "album";
+}
+
 public sealed class ItunesBookMetadataProvider(IHttpClientFactory httpClientFactory, IOptions<ExternalMetadataOptions> options)
     : ItunesMetadataProviderBase(httpClientFactory, options)
 {
@@ -55,6 +64,7 @@ public abstract class ItunesMetadataProviderBase(IHttpClientFactory httpClientFa
 
         return response?.Results
             .Where(item => ResolveId(item) is not null && !string.IsNullOrWhiteSpace(ResolveTitle(item)))
+            .Where(IsResultAllowed)
             .Select(item => new ExternalMetadataSearchResult(
                 ProviderId,
                 SupportedKind,
@@ -82,7 +92,7 @@ public abstract class ItunesMetadataProviderBase(IHttpClientFactory httpClientFa
             cancellationToken);
         var item = response?.Results.FirstOrDefault();
 
-        if (item is null || string.IsNullOrWhiteSpace(ResolveTitle(item)))
+        if (item is null || string.IsNullOrWhiteSpace(ResolveTitle(item)) || !IsResultAllowed(item))
         {
             return null;
         }
@@ -117,7 +127,7 @@ public abstract class ItunesMetadataProviderBase(IHttpClientFactory httpClientFa
 
     private string? ResolveTitle(ItunesResult item)
     {
-        return SupportedKind == ExternalMetadataKinds.Album
+        return SupportedKind is ExternalMetadataKinds.Album or ExternalMetadataKinds.Single
             ? NormalizeOptional(item.CollectionName ?? item.TrackName)
             : NormalizeOptional(item.TrackName ?? item.CollectionName);
     }
@@ -151,10 +161,70 @@ public abstract class ItunesMetadataProviderBase(IHttpClientFactory httpClientFa
             ("collectionName", item.CollectionName),
             ("genre", item.PrimaryGenreName),
             ("year", ReadYear(item.ReleaseDate)),
+            ("collectionType", item.CollectionType),
+            ("trackCount", item.TrackCount?.ToString()),
             ("country", item.Country),
             ("currency", item.Currency),
             ("storeKind", item.Kind),
             ("contentAdvisoryRating", item.ContentAdvisoryRating));
+    }
+
+    private bool IsResultAllowed(ItunesResult item)
+    {
+        if (SupportedKind == ExternalMetadataKinds.Single)
+        {
+            return IsSingle(item);
+        }
+
+        if (SupportedKind != ExternalMetadataKinds.Album)
+        {
+            return true;
+        }
+
+        return IsAlbum(item);
+    }
+
+    private bool IsAlbum(ItunesResult item)
+    {
+        var title = ResolveTitle(item);
+        if (string.IsNullOrWhiteSpace(title))
+        {
+            return false;
+        }
+
+        if (string.Equals(item.CollectionType, "Single", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        if (item.TrackCount is <= 1)
+        {
+            return false;
+        }
+
+        return !LooksLikeSingleOrEp(title);
+    }
+
+    private bool IsSingle(ItunesResult item)
+    {
+        var title = ResolveTitle(item);
+        if (string.IsNullOrWhiteSpace(title))
+        {
+            return false;
+        }
+
+        return string.Equals(item.CollectionType, "Single", StringComparison.OrdinalIgnoreCase) ||
+            item.TrackCount is <= 1 ||
+            LooksLikeSingleOrEp(title);
+    }
+
+    private static bool LooksLikeSingleOrEp(string title)
+    {
+        var normalized = title.Trim().ToLowerInvariant();
+        return normalized.EndsWith(" - single", StringComparison.Ordinal) ||
+            normalized.EndsWith(" - ep", StringComparison.Ordinal) ||
+            normalized.Contains("(single)", StringComparison.Ordinal) ||
+            normalized.Contains("(ep)", StringComparison.Ordinal);
     }
 
     private static string? ReadYear(string? value)
@@ -186,6 +256,7 @@ public abstract class ItunesMetadataProviderBase(IHttpClientFactory httpClientFa
         public string? Country { get; set; }
         public string? Currency { get; set; }
         public string? Kind { get; set; }
+        public string? CollectionType { get; set; }
         public string? ContentAdvisoryRating { get; set; }
         public int? TrackTimeMillis { get; set; }
         public int? TrackCount { get; set; }

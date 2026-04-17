@@ -4,10 +4,27 @@ using Microsoft.Extensions.Options;
 namespace Collectify.Api.Modules.ExternalMetadata;
 
 public sealed class MusicBrainzMetadataProvider(IHttpClientFactory httpClientFactory, IOptions<ExternalMetadataOptions> options)
+    : MusicBrainzReleaseGroupMetadataProviderBase(httpClientFactory, options)
+{
+    public override string ProviderId => "musicbrainz";
+    public override string SupportedKind => ExternalMetadataKinds.Album;
+    protected override string PrimaryType => "Album";
+}
+
+public sealed class MusicBrainzSingleMetadataProvider(IHttpClientFactory httpClientFactory, IOptions<ExternalMetadataOptions> options)
+    : MusicBrainzReleaseGroupMetadataProviderBase(httpClientFactory, options)
+{
+    public override string ProviderId => "musicbrainz-singles";
+    public override string SupportedKind => ExternalMetadataKinds.Single;
+    protected override string PrimaryType => "Single";
+}
+
+public abstract class MusicBrainzReleaseGroupMetadataProviderBase(IHttpClientFactory httpClientFactory, IOptions<ExternalMetadataOptions> options)
     : ExternalMetadataProviderBase(httpClientFactory, options), IExternalMetadataProvider
 {
-    public string ProviderId => "musicbrainz";
-    public string SupportedKind => ExternalMetadataKinds.Album;
+    public abstract string ProviderId { get; }
+    public abstract string SupportedKind { get; }
+    protected abstract string PrimaryType { get; }
 
     public async Task<IReadOnlyList<ExternalMetadataSearchResult>> SearchAsync(string query, CancellationToken cancellationToken)
     {
@@ -17,13 +34,15 @@ public sealed class MusicBrainzMetadataProvider(IHttpClientFactory httpClientFac
                 "release-group",
                 ("query", query),
                 ("fmt", "json"),
-                ("limit", "12")),
+                ("limit", "25")),
             Options.MusicBrainz,
             configureHeaders: null,
             cancellationToken);
 
         return response?.ReleaseGroups
             .Where(album => !string.IsNullOrWhiteSpace(album.Id) && !string.IsNullOrWhiteSpace(album.Title))
+            .Where(IsExpectedPrimaryType)
+            .Take(12)
             .Select(album => new ExternalMetadataSearchResult(
                 ProviderId,
                 SupportedKind,
@@ -53,7 +72,7 @@ public sealed class MusicBrainzMetadataProvider(IHttpClientFactory httpClientFac
             configureHeaders: null,
             cancellationToken);
 
-        if (response is null || string.IsNullOrWhiteSpace(response.Id) || string.IsNullOrWhiteSpace(response.Title))
+        if (response is null || string.IsNullOrWhiteSpace(response.Id) || string.IsNullOrWhiteSpace(response.Title) || !IsExpectedPrimaryType(response))
         {
             return null;
         }
@@ -96,6 +115,11 @@ public sealed class MusicBrainzMetadataProvider(IHttpClientFactory httpClientFac
         return string.IsNullOrWhiteSpace(releaseGroupId)
             ? null
             : $"https://coverartarchive.org/release-group/{releaseGroupId}/front-500";
+    }
+
+    private bool IsExpectedPrimaryType(MusicBrainzReleaseGroupSummary releaseGroup)
+    {
+        return string.Equals(releaseGroup.PrimaryType, PrimaryType, StringComparison.OrdinalIgnoreCase);
     }
 
     private sealed class MusicBrainzReleaseGroupSearchResponse
